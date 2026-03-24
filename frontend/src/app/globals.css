@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #0f172a;
+  --color-foreground: #f8fafc;
+  --color-primary: #10b981;
+  --color-primary-dark: #059669;
+  --color-secondary: #3b82f6;
+  --color-accent: #f59e0b;
+  --color-limit-low: #22c55e;
+  --color-limit-med: #eab308;
+  --color-limit-high: #ef4444;
+}
+
+body {
+  color: var(--color-foreground);
+  background: var(--color-background);
+  font-family: Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary hover:bg-primary-dark text-white font-bold py-3 px-6 rounded-lg transition-transform transform active:scale-95 shadow-lg shadow-primary/30;
+  }
+  
+  .glass-panel {
+    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl shadow-xl;
+  }
+
+  .number-btn {
+    @apply w-12 h-12 flex items-center justify-center rounded-xl text-lg font-bold border-2 transition-all cursor-pointer hover:scale-105 active:scale-95 text-white shadow-md;
+  }
+  
+  .number-low {
+    @apply bg-limit-low/20 border-limit-low hover:bg-limit-low/40 shadow-limit-low/20;
+  }
+  
+  .number-med {
+    @apply bg-limit-med/20 border-limit-med hover:bg-limit-med/40 shadow-limit-med/20;
+  }
+  
+  .number-high {
+    @apply bg-limit-high/80 border-limit-high cursor-not-allowed hover:scale-100 opacity-50;
+  }
+  
+  .number-selected {
+    @apply ring-4 ring-white animate-pulse;
+  }
+}

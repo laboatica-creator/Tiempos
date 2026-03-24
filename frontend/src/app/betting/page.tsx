@@ -1,0 +1,443 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { api } from '../../lib/api';
+import PrintButton from '../../components/PrintButton';
+
+interface CartItem {
+  number: string;
+  amount: number;
+}
+
+export default function BettingPage() {
+  const [balance, setBalance] = useState(0);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [selectedNumbers, setSelectedNumbers] = useState<string[]>([]);
+  const [betAmount, setBetAmount] = useState<number>(1000);
+  const [countdown, setCountdown] = useState('--:--:--');
+  const [lotteryType, setLotteryType] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toLocaleDateString('en-CA'));
+  const [availableDraws, setAvailableDraws] = useState<any[]>([]);
+  const [activeDraw, setActiveDraw] = useState<any>(null);
+  const [numbers, setNumbers] = useState<{number: string, exposure: number}[]>([]);
+  const [isMounted, setIsMounted] = useState(false);
+  const [selectionStep, setSelectionStep] = useState(1); // 1: Lottery, 2: Date/Time, 3: Numbers
+  const [lastBetTicket, setLastBetTicket] = useState<any>(null);
+
+  const next7Days = Array.from({length: 8}, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    // Use local date string in YYYY-MM-DD format
+    return d.toLocaleDateString('en-CA'); 
+  });
+
+  useEffect(() => {
+    setIsMounted(true);
+    fetchBalance();
+  }, []);
+
+  useEffect(() => {
+    if (activeDraw) {
+      const interval = setInterval(() => {
+        updateCountdown();
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [activeDraw]);
+
+  useEffect(() => {
+      if (selectionStep === 2 && lotteryType) {
+          fetchDrawsForSelection();
+      }
+  }, [selectedDate, lotteryType, selectionStep]);
+
+  const fetchBalance = async () => {
+    try {
+        const token = sessionStorage.getItem('token');
+        if (!token) return;
+        const wallet = await api.get('/wallet/balance', token);
+        if (wallet && !wallet.error) setBalance(Number(wallet.balance));
+    } catch (e) {
+        console.error(e);
+    }
+  };
+
+  const fetchDrawsForSelection = async () => {
+    try {
+        const token = sessionStorage.getItem('token');
+        const draws = await api.get('/draws', token);
+        if (Array.isArray(draws)) {
+          const filtered = draws.filter((d: any) => 
+            d.lottery_type === lotteryType && 
+            d.status === 'OPEN' && 
+            new Date(d.draw_date).toISOString().split('T')[0] === selectedDate
+          );
+          setAvailableDraws(filtered);
+        }
+    } catch (e) {
+        console.error(e);
+    }
+  };
+
+  const handleSelectLottery = (type: string) => {
+    setLotteryType(type);
+    setSelectionStep(2);
+  };
+
+  const handleSelectDraw = async (draw: any) => {
+    const [h, m, s] = draw.draw_time.split(':').map(Number);
+    const drawFullDate = new Date(draw.draw_date);
+    drawFullDate.setHours(h, m, s || 0, 0);
+    
+    const now = new Date();
+    const diff = drawFullDate.getTime() - now.getTime();
+
+    if (diff < 20 * 60 * 1000) {
+      alert('Este sorteo ya está cerrado para nuevas apuestas.');
+      return;
+    }
+
+    setActiveDraw(draw);
+    setSelectionStep(3);
+    const token = sessionStorage.getItem('token');
+    const exposureData = await api.get(`/bets/exposure/${draw.id}`, token);
+    if (exposureData && exposureData.exposure) {
+        const nums = Object.entries(exposureData.exposure).map(([num, exp]) => ({
+            number: num,
+            exposure: Number(exp)
+        }));
+        setNumbers(nums);
+    } else {
+        setNumbers(Array.from({ length: 100 }, (_, i) => ({
+            number: i.toString().padStart(2, '0'),
+            exposure: 0
+        })));
+    }
+  };
+
+  const updateCountdown = () => {
+    if (!activeDraw) return;
+    const now = new Date();
+    const [hours, minutes, seconds] = activeDraw.draw_time.split(':').map(Number);
+    const drawDate = new Date(activeDraw.draw_date);
+    drawDate.setHours(hours, minutes, seconds || 0, 0);
+    const diff = drawDate.getTime() - now.getTime();
+
+    if (diff <= 0) {
+      setCountdown('SORTEANDO...');
+      return;
+    }
+
+    if (diff < 20 * 60 * 1000) {
+      setCountdown('CERRADO');
+      return;
+    }
+
+    const h = Math.floor(diff / (1000 * 60 * 60));
+    const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const s = Math.floor((diff % (1000 * 60)) / 1000);
+    setCountdown(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
+  };
+
+  const handleConfirmBet = async () => {
+    if (cart.length === 0 || !activeDraw) return;
+    if (countdown === 'CERRADO' || countdown === 'SORTEANDO...') {
+        alert('El sorteo ha cerrado. No se pueden procesar más apuestas.');
+        return;
+    }
+
+    try {
+        const token = sessionStorage.getItem('token');
+        const data = await api.post('/bets/place', {
+            draw_id: activeDraw.id,
+            bets: cart
+        }, token);
+
+        if (data.error) {
+            alert(data.error);
+        } else {
+            const totalAmount = cart.reduce((s, i) => s + i.amount, 0);
+            const ticketData = {
+                title: 'TIEMPOS NICA Y TICA',
+                subtitle: `TICKET DE APUESTA`,
+                lines: [
+                    { label: 'Sorteo', value: `${lotteryType || ''} - ${activeDraw.draw_time}` },
+                    { label: 'Fecha', value: new Date(activeDraw.draw_date).toLocaleDateString() },
+                    { label: 'Hora', value: new Date().toLocaleTimeString() },
+                    { label: 'Ref.', value: `#${data.bet_id?.slice(0, 6) || 'N/A'}` },
+                    ...cart.map(i => ({ label: `Jugada #${i.number}`, value: `₡${i.amount.toLocaleString()}` })),
+                    { label: 'TOTAL APOSTADO', value: `₡${totalAmount.toLocaleString()}`, bold: true },
+                ],
+                footer: `Los premios se cancelarán en un máximo de 24 horas. ¡Gracias por jugar!\n--------------------------------\n${new Date().toLocaleString()}`,
+                barcode: data.bet_id?.slice(0, 16) || ''
+            };
+            setLastBetTicket(ticketData);
+            alert('¡Su apuesta ha sido procesada con éxito! Puede imprimir su ticket abajo.');
+            fetchBalance();
+            setCart([]);
+        }
+    } catch (err) {
+        alert('Error al realizar la apuesta.');
+    }
+  };
+
+  const addToCart = () => {
+    if (selectedNumbers.length > 0) {
+      if (betAmount < 200) {
+        alert('Monto mínimo: 200 CRC');
+        return;
+      }
+      setCart((prev) => {
+        let newCart = [...prev];
+        selectedNumbers.forEach(num => {
+            const existingIdx = newCart.findIndex((item) => item.number === num);
+            if (existingIdx !== -1) {
+                newCart[existingIdx] = { ...newCart[existingIdx], amount: newCart[existingIdx].amount + betAmount };
+            } else {
+                newCart.push({ number: num, amount: betAmount });
+            }
+        });
+        return newCart;
+      });
+      setSelectedNumbers([]);
+    }
+  };
+
+  if (!isMounted) return <div className="min-h-screen bg-[#0f172a]" />;
+
+  return (
+    <main className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-700">
+      {/* Selection Column */}
+      <section className="lg:col-span-2 space-y-6">
+        <header className="flex justify-between items-center bg-white/5 p-6 rounded-2xl border border-white/10 shadow-xl">
+           <div>
+              <h1 className="text-2xl font-black text-white uppercase tracking-tighter">Realizar Apuesta</h1>
+              <div className="flex gap-2 mt-2">
+                 <span className={`w-3 h-3 rounded-full ${selectionStep >= 1 ? 'bg-emerald-500' : 'bg-gray-700'}`}></span>
+                 <span className={`w-3 h-3 rounded-full ${selectionStep >= 2 ? 'bg-emerald-500' : 'bg-gray-700'}`}></span>
+                 <span className={`w-3 h-3 rounded-full ${selectionStep >= 3 ? 'bg-emerald-500' : 'bg-gray-700'}`}></span>
+              </div>
+           </div>
+           <div className="text-right bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20">
+             <p className="text-[10px] text-emerald-400 font-black uppercase">Balance</p>
+             <p className="text-xl font-black text-white">₡{balance.toLocaleString()}</p>
+           </div>
+        </header>
+
+        {selectionStep === 1 && (
+            <div className="glass-panel p-10 text-center space-y-8 animate-in zoom-in duration-300">
+                <h2 className="text-3xl font-black text-white uppercase italic">Seleccione la Lotería</h2>
+                <div className="grid grid-cols-2 gap-6">
+                    {['TICA', 'NICA'].map(t => (
+                        <button 
+                            key={t}
+                            onClick={() => handleSelectLottery(t)}
+                            className="group relative h-40 flex flex-col items-center justify-center bg-white/5 border border-white/10 rounded-3xl hover:bg-emerald-500/10 hover:border-emerald-500/50 transition-all active:scale-95 overflow-hidden"
+                        >
+                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-100 transition-opacity">
+                                <span className="text-4xl">{t === 'TICA' ? '🇨🇷' : '🇳🇮'}</span>
+                            </div>
+                            <span className="text-5xl font-black text-white tracking-widest group-hover:scale-110 transition-transform">{t}</span>
+                            <span className="text-xs text-gray-500 font-bold uppercase mt-2 group-hover:text-emerald-400">Tiempos {t === 'TICA' ? 'Costa Rica' : 'Nicaragua'}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+        )}
+
+        {selectionStep === 2 && (
+            <div className="glass-panel p-10 space-y-8 animate-in slide-in-from-right duration-300">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => setSelectionStep(1)} className="p-2 bg-white/5 rounded-lg text-gray-400 hover:text-white transition-colors">← Volver</button>
+                        <h2 className="text-2xl font-black text-white uppercase italic">Sorteos de {lotteryType}</h2>
+                    </div>
+                </div>
+
+                <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide">
+                    {next7Days.map(date => {
+                        const d = new Date(date + 'T12:00:00'); // Use noon to avoid timezone issues
+                        const isSelected = selectedDate === date;
+                        const label = d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+                        return (
+                            <button 
+                                key={date}
+                                onClick={() => setSelectedDate(date)}
+                                className={`px-5 py-3 rounded-xl font-bold uppercase text-[10px] whitespace-nowrap transition-all border ${
+                                    isSelected 
+                                    ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/20' 
+                                    : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {availableDraws.length > 0 ? availableDraws.map(d => (
+                        <button 
+                            key={d.id}
+                            onClick={() => handleSelectDraw(d)}
+                            className="bg-white/5 border border-white/10 p-6 rounded-2xl flex justify-between items-center group hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all active:scale-95"
+                        >
+                            <div className="flex flex-col text-left">
+                                <span className="text-xs text-gray-500 font-black uppercase mb-1">Hora del Sorteo</span>
+                                <span className="text-2xl font-black text-white">{d.draw_time}</span>
+                            </div>
+                            <div className="h-10 w-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                                →
+                            </div>
+                        </button>
+                    )) : (
+                        <div className="col-span-2 py-10 text-center text-gray-500 italic uppercase font-black text-xs tracking-widest opacity-30 border-2 border-dashed border-white/5 rounded-2xl">
+                            No hay sorteos disponibles para la fecha seleccionada.
+                        </div>
+                    )}
+                </div>
+            </div>
+        )}
+
+        {selectionStep === 3 && activeDraw && (
+            <div className="space-y-6 animate-in zoom-in duration-300">
+                 <div className="glass-panel p-6 border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 to-transparent">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => setSelectionStep(2)} className="p-2 bg-white/5 rounded-lg text-gray-400 hover:text-white transition-colors">←</button>
+                            <div>
+                                <h3 className="text-xl font-black text-white uppercase italic">{lotteryType} - {activeDraw.draw_time}</h3>
+                                <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{new Date(activeDraw.draw_date).toLocaleDateString()}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3 bg-black/40 px-6 py-3 rounded-2xl border border-white/10">
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-gray-500 font-black uppercase">Cierra en</span>
+                                <span className={`font-mono text-xl font-black tracking-tighter ${countdown === 'CERRADO' ? 'text-red-500 animate-pulse' : 'text-emerald-400'}`}>{countdown}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="glass-panel p-6">
+                    <h2 className="text-lg font-black text-gray-300 uppercase mb-6 tracking-widest">Pizarra de Números</h2>
+                    <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+                        {numbers.map((item) => {
+                            const isLimitReached = item.exposure >= 50000;
+                            return (
+                                <button
+                                    key={item.number}
+                                    onClick={() => {
+                                        if (!isLimitReached) {
+                                            setSelectedNumbers(prev => 
+                                                prev.includes(item.number) 
+                                                ? prev.filter(n => n !== item.number) 
+                                                : [...prev, item.number]
+                                            );
+                                        }
+                                    }}
+                                    className={`relative h-12 flex flex-col items-center justify-center rounded-xl font-black transition-all text-lg ${
+                                        selectedNumbers.includes(item.number) 
+                                        ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
+                                        : isLimitReached 
+                                            ? 'bg-red-500/10 text-red-500/40 cursor-not-allowed border border-red-500/20' 
+                                            : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border border-white/5'
+                                    }`}
+                                    disabled={isLimitReached}
+                                >
+                                    {item.number}
+                                    {isLimitReached && <span className="absolute -top-1 -right-1 text-[8px] bg-red-500 text-white px-1 rounded-full uppercase">Full</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <p className="mt-4 text-[10px] text-gray-500 uppercase font-bold text-center">Toca un número para seleccionar el monto de tu apuesta</p>
+                </div>
+            </div>
+        )}
+      </section>
+
+      <aside className="space-y-6">
+          {selectedNumbers.length > 0 && selectionStep === 3 && (
+              <div className="glass-panel p-6 border-emerald-500/50 bg-emerald-500/5 animate-in slide-in-from-bottom duration-300">
+                  <h3 className="text-lg font-black text-white uppercase mb-4">Números Seleccionados: <span className="text-emerald-400">{selectedNumbers.map(n => `#${n}`).join(', ')}</span></h3>
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                      {[200, 500, 1000, 5000].map(amt => (
+                          <button 
+                            key={amt} 
+                            onClick={() => setBetAmount(amt)}
+                            className={`py-3 rounded-xl font-black transition-all border ${betAmount === amt ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'}`}
+                          >
+                            ₡{amt.toLocaleString()}
+                          </button>
+                      ))}
+                  </div>
+                  <div className="flex gap-2">
+                      <input 
+                        type="number" 
+                        value={betAmount} 
+                        onChange={(e) => setBetAmount(Number(e.target.value))}
+                        className="flex-1 bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black text-center outline-none focus:border-emerald-500"
+                        min={200}
+                      />
+                      <button onClick={addToCart} className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-6 rounded-xl transition-all active:scale-95 shadow-lg shadow-emerald-500/20 uppercase text-xs">Añadir</button>
+                  </div>
+              </div>
+          )}
+
+          <div className="glass-panel flex flex-col min-h-[400px]">
+            <div className="p-6 border-b border-white/5 flex justify-between items-center">
+                <h2 className="text-xl font-black text-white uppercase italic">Resumen</h2>
+                <span className="bg-white/5 px-2 py-1 rounded text-[10px] text-gray-400 font-bold">{cart.length} ITEMS</span>
+            </div>
+            <div className="flex-1 p-4 space-y-3">
+                {cart.map((item, idx) => (
+                    <div key={idx} className="bg-white/5 border border-white/5 p-4 rounded-2xl flex justify-between items-center group">
+                        <div className="flex items-center gap-4">
+                            <span className="text-2xl font-black text-emerald-400">#{item.number}</span>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-gray-500 font-black uppercase">Monto</span>
+                                <span className="text-white font-black">₡{item.amount.toLocaleString()}</span>
+                            </div>
+                        </div>
+                        <button onClick={() => setCart(c => c.filter(x => x.number !== item.number))} className="w-8 h-8 rounded-full bg-white/5 text-gray-500 hover:bg-red-500/10 hover:text-red-500 transition-all flex items-center justify-center">×</button>
+                    </div>
+                ))}
+                {cart.length === 0 && <div className="py-20 text-center text-gray-600 font-bold uppercase italic opacity-20 text-sm">Carrito Vacío</div>}
+            </div>
+            <div className="p-6 bg-black/40 rounded-b-3xl border-t border-white/5">
+                <div className="flex justify-between items-end mb-4">
+                    <span className="text-xs text-gray-500 font-black uppercase">Total Apostado</span>
+                    <span className="text-3xl font-black text-white tracking-tighter">₡{cart.reduce((s,i) => s+i.amount, 0).toLocaleString()}</span>
+                </div>
+                <button 
+                    onClick={handleConfirmBet}
+                    disabled={cart.length === 0 || countdown === 'CERRADO' || (cart.reduce((s,i) => s+i.amount, 0) > balance)}
+                    className={`w-full py-5 rounded-2xl font-black text-xl shadow-2xl transition-all transform active:scale-95 uppercase tracking-widest ${
+                        cart.length > 0 && countdown !== 'CERRADO' && (cart.reduce((s,i) => s+i.amount, 0) <= balance)
+                        ? 'bg-gradient-to-r from-emerald-600 to-emerald-400 text-white shadow-emerald-500/30' 
+                        : 'bg-white/5 text-gray-600 cursor-not-allowed'
+                    }`}
+                >
+                    Confirmar Jugada
+                </button>
+
+                {lastBetTicket && (
+                    <div className="mt-4 p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl flex justify-between items-center">
+                        <div>
+                            <p className="text-emerald-400 font-black text-xs uppercase">✓ Apuesta Confirmada</p>
+                            <p className="text-gray-500 text-[10px]">Imprima su comprobante</p>
+                        </div>
+                        <PrintButton
+                            ticket={lastBetTicket}
+                            label="Ticket"
+                            className="py-3 px-5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl"
+                        />
+                    </div>
+                )}
+            </div>
+          </div>
+      </aside>
+    </main>
+  );
+}
