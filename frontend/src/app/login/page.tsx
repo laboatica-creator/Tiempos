@@ -27,7 +27,7 @@ export default function LoginPage() {
     setError('');
     
     try {
-      const data = await api.post('/auth/login', {
+      const data = await api.post('/login', {
         email,
         password
       });
