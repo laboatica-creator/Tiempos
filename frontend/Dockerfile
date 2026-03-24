@@ -1,15 +1,15 @@
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
-
-FROM node:20-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/package*.json ./
-RUN npm install --only=production
-EXPOSE 3000
-CMD ["npm", "start"]
+cd C:\Progamacion\tiempos\frontend
+echo FROM node:20-alpine > Dockerfile
+echo WORKDIR /app >> Dockerfile
+echo COPY package*.json ./ >> Dockerfile
+echo RUN npm install >> Dockerfile
+echo COPY . . >> Dockerfile
+echo RUN npm run build >> Dockerfile
+echo FROM node:20-alpine >> Dockerfile
+echo WORKDIR /app >> Dockerfile
+echo ENV NODE_ENV=production >> Dockerfile
+echo COPY --from=builder /app/.next ./.next >> Dockerfile
+echo COPY --from=builder /app/package*.json ./ >> Dockerfile
+echo COPY --from=builder /app/node_modules ./node_modules >> Dockerfile
+echo EXPOSE 3000 >> Dockerfile
+echo CMD ["npm", "start"] >> Dockerfile
