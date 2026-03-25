@@ -36,7 +36,8 @@ const allowedOrigins = [
   'http://localhost:3000',
   'https://tiempos.vercel.app',
   'https://tiempos-frontend.vercel.app',
-  /\.vercel\.app$/ // Permitir todas las previews de Vercel
+  /\.vercel\.app$/,
+  /\.onrender\.com$/
 ];
 
 app.use(cors({
@@ -84,6 +85,7 @@ console.log('🔧 [8] Rutas cargadas');
 console.log('🔧 [9] Configurando PostgreSQL...');
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgres://tiempos_user:tiempos_password@localhost:5432/tiempos_db',
+  connectionTimeoutMillis: 5000,
 });
 
 pool.on('error', (err) => {
@@ -108,7 +110,13 @@ app.get('/health', async (req: Request, res: Response) => {
   try {
     const dbRes = await pool.query('SELECT NOW()');
     let redisPing = 'DISABLED';
-    if (isRedisEnabled) redisPing = await redisClient.ping();
+    if (isRedisEnabled) {
+      try {
+        redisPing = await redisClient.ping();
+      } catch (e) {
+        redisPing = 'ERROR';
+      }
+    }
     res.json({
       status: 'UP',
       time: dbRes.rows[0].now,
@@ -126,12 +134,20 @@ const startServer = async () => {
   console.log('🚀 [14] Iniciando servidor...');
   
   try {
-    console.log('📡 [15] Conectando Redis...');
+    // Conectar Redis con timeout
+    console.log('📡 [15] Conectando Redis (con timeout de 3s)...');
+    const redisTimeout = setTimeout(() => {
+      console.warn('⚠️ Redis connection timeout (3s) - continuando sin Redis');
+      isRedisEnabled = false;
+    }, 3000);
+    
     try {
       await redisClient.connect();
+      clearTimeout(redisTimeout);
       isRedisEnabled = true;
       console.log('✅ Redis connected successfully.');
     } catch (e) {
+      clearTimeout(redisTimeout);
       isRedisEnabled = false;
       console.warn('⚠️ Redis connection failed (Continuing without Redis):', (e as Error).message);
     }
