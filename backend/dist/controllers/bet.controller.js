@@ -69,10 +69,6 @@ const placeBet = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         // Deduct from Wallet
         const walletRes = yield client.query(`UPDATE wallets SET balance = balance - $1, total_bets = total_bets + $1, updated_at = NOW() WHERE user_id = $2 AND balance >= $1 RETURNING id`, [totalBetAmount, userId]);
         if (walletRes.rows.length === 0) {
-            // Revert Redis counts
-            for (const bet of bets) {
-                yield index_1.redisClient.decrBy(`draw:${draw_id}:number:${bet.number}`, bet.amount);
-            }
             yield client.query('ROLLBACK');
             return res.status(400).json({ error: 'Insufficient wallet balance.' });
         }

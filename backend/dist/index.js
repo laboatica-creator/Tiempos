@@ -17,7 +17,6 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const pg_1 = require("pg");
-const redis_1 = require("redis");
 const http_1 = require("http");
 const socket_io_1 = require("socket.io");
 const cron_service_1 = require("./services/cron.service");
@@ -38,7 +37,7 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
 });
 console.log('🔧 [5] Configurando middleware...');
-// Middleware de CORS dinámico para Vercel
+// Middleware de CORS dinámico para Vercel y Render
 const allowedOrigins = [
     'http://localhost:3000',
     'https://tiempos.vercel.app',
@@ -93,34 +92,17 @@ exports.pool.on('error', (err) => {
     console.error('Unexpected error on idle client', err);
 });
 console.log('🔧 [10] PostgreSQL configurado');
-// Redis
-console.log('🔧 [11] Configurando Redis...');
-exports.redisClient = (0, redis_1.createClient)({
-    url: process.env.REDIS_URL || 'redis://localhost:6379'
-});
-let isRedisEnabled = false;
-exports.redisClient.on('error', (err) => {
-    if (isRedisEnabled)
-        console.log('Redis Client Error', err);
-});
-console.log('🔧 [12] Redis configurado');
-// Health check
+// ⚠️ REDIS DESHABILITADO - exportamos null para compatibilidad
+exports.redisClient = null;
+const isRedisEnabled = false;
+// Health check (sin Redis)
 app.get('/health', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const dbRes = yield exports.pool.query('SELECT NOW()');
-        let redisPing = 'DISABLED';
-        if (isRedisEnabled) {
-            try {
-                redisPing = yield exports.redisClient.ping();
-            }
-            catch (e) {
-                redisPing = 'ERROR';
-            }
-        }
         res.json({
             status: 'UP',
             time: dbRes.rows[0].now,
-            redis: redisPing
+            redis: 'DISABLED'
         });
     }
     catch (err) {
@@ -132,23 +114,6 @@ console.log('🔧 [13] Health check configurado');
 const startServer = () => __awaiter(void 0, void 0, void 0, function* () {
     console.log('🚀 [14] Iniciando servidor...');
     try {
-        // Conectar Redis con timeout
-        console.log('📡 [15] Conectando Redis (con timeout de 3s)...');
-        const redisTimeout = setTimeout(() => {
-            console.warn('⚠️ Redis connection timeout (3s) - continuando sin Redis');
-            isRedisEnabled = false;
-        }, 3000);
-        try {
-            yield exports.redisClient.connect();
-            clearTimeout(redisTimeout);
-            isRedisEnabled = true;
-            console.log('✅ Redis connected successfully.');
-        }
-        catch (e) {
-            clearTimeout(redisTimeout);
-            isRedisEnabled = false;
-            console.warn('⚠️ Redis connection failed (Continuing without Redis):', e.message);
-        }
         console.log('⏰ [16] Inicializando cron jobs...');
         try {
             (0, cron_service_1.setupCronJobs)();
@@ -166,6 +131,7 @@ const startServer = () => __awaiter(void 0, void 0, void 0, function* () {
             console.error('❌ CRITICAL: Database connection failed:', dbErr.message);
         }
         console.log(`🌐 [18] Iniciando servidor HTTP en puerto ${PORT}...`);
+        // 🔥 CORRECCIÓN: listen solo con puerto (bind automático a 0.0.0.0)
         httpServer.listen(PORT, () => {
             console.log(`✅ [server]: Server is running on port ${PORT}`);
         });

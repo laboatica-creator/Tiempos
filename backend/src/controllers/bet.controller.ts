@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { pool, redisClient } from '../index';
+import { pool } from '../index';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { sendTicketPurchaseEmail } from '../services/email.service';
 
@@ -87,10 +87,6 @@ export const placeBet = async (req: AuthRequest, res: Response) => {
         );
 
         if (walletRes.rows.length === 0) {
-            // Revert Redis counts
-            for (const bet of bets) {
-                await redisClient.decrBy(`draw:${draw_id}:number:${bet.number}`, bet.amount);
-            }
             await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Insufficient wallet balance.' });
         }

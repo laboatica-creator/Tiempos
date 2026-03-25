@@ -2,7 +2,6 @@ import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { Pool } from 'pg';
-import { createClient } from 'redis';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { setupCronJobs } from './services/cron.service';
@@ -31,7 +30,7 @@ io.on('connection', (socket) => {
 
 console.log('🔧 [5] Configurando middleware...');
 
-// Middleware de CORS dinámico para Vercel
+// Middleware de CORS dinámico para Vercel y Render
 const allowedOrigins = [
   'http://localhost:3000',
   'https://tiempos.vercel.app',
@@ -93,34 +92,18 @@ pool.on('error', (err) => {
 });
 console.log('🔧 [10] PostgreSQL configurado');
 
-// Redis
-console.log('🔧 [11] Configurando Redis...');
-export const redisClient = createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379'
-});
+// ⚠️ REDIS DESHABILITADO - exportamos null para compatibilidad
+export const redisClient = null;
+const isRedisEnabled = false;
 
-let isRedisEnabled = false;
-redisClient.on('error', (err) => {
-  if (isRedisEnabled) console.log('Redis Client Error', err);
-});
-console.log('🔧 [12] Redis configurado');
-
-// Health check
+// Health check (sin Redis)
 app.get('/health', async (req: Request, res: Response) => {
   try {
     const dbRes = await pool.query('SELECT NOW()');
-    let redisPing = 'DISABLED';
-    if (isRedisEnabled) {
-      try {
-        redisPing = await redisClient.ping();
-      } catch (e) {
-        redisPing = 'ERROR';
-      }
-    }
     res.json({
       status: 'UP',
       time: dbRes.rows[0].now,
-      redis: redisPing
+      redis: 'DISABLED'
     });
   } catch (err) {
     res.status(500).json({ error: 'System unhealthy' });
@@ -134,24 +117,6 @@ const startServer = async () => {
   console.log('🚀 [14] Iniciando servidor...');
   
   try {
-    // Conectar Redis con timeout
-    console.log('📡 [15] Conectando Redis (con timeout de 3s)...');
-    const redisTimeout = setTimeout(() => {
-      console.warn('⚠️ Redis connection timeout (3s) - continuando sin Redis');
-      isRedisEnabled = false;
-    }, 3000);
-    
-    try {
-      await redisClient.connect();
-      clearTimeout(redisTimeout);
-      isRedisEnabled = true;
-      console.log('✅ Redis connected successfully.');
-    } catch (e) {
-      clearTimeout(redisTimeout);
-      isRedisEnabled = false;
-      console.warn('⚠️ Redis connection failed (Continuing without Redis):', (e as Error).message);
-    }
-
     console.log('⏰ [16] Inicializando cron jobs...');
     try {
       setupCronJobs();
@@ -169,6 +134,7 @@ const startServer = async () => {
     }
 
     console.log(`🌐 [18] Iniciando servidor HTTP en puerto ${PORT}...`);
+    // 🔥 CORRECCIÓN: listen solo con puerto (bind automático a 0.0.0.0)
     httpServer.listen(PORT, () => {
       console.log(`✅ [server]: Server is running on port ${PORT}`);
     });
