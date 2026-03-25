@@ -20,15 +20,15 @@ const pg_1 = require("pg");
 const redis_1 = require("redis");
 const http_1 = require("http");
 const socket_io_1 = require("socket.io");
+const cron_service_1 = require("./services/cron.service");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
-// 🔥 CAMBIO IMPORTANTE AQUÍ
+// 🔥 Puerto dinámico para Render y fallback 4000 local
 const PORT = process.env.PORT || 4000;
 const httpServer = (0, http_1.createServer)(app);
-const io = new socket_io_1.Server(httpServer, {
-    cors: { origin: '*' }
-});
+const io = new socket_io_1.Server(httpServer, { cors: { origin: '*' } });
 app.set('io', io);
+// Socket.io
 io.on('connection', (socket) => {
     console.log('Client connected:', socket.id);
     socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
@@ -37,6 +37,7 @@ io.on('connection', (socket) => {
 app.use((0, cors_1.default)());
 app.use(express_1.default.json({ limit: '50mb' }));
 app.use(express_1.default.urlencoded({ extended: true, limit: '50mb' }));
+// Rutas base
 app.get('/', (req, res) => {
     res.json({
         message: 'Welcome to Tiempos Pro API',
@@ -57,15 +58,15 @@ app.use('/api/bets', bet_route_1.default);
 app.use('/api/draws', draw_route_1.default);
 app.use('/api/whatsapp', whatsapp_route_1.default);
 app.use('/api/admin', admin_route_1.default);
-// Database connection (PostgreSQL)
+// PostgreSQL
 exports.pool = new pg_1.Pool({
     connectionString: process.env.DATABASE_URL || 'postgres://tiempos_user:tiempos_password@localhost:5432/tiempos_db',
 });
 exports.pool.on('error', (err) => {
     console.error('Unexpected error on idle client', err);
-    process.exit(-1);
+    // NO cerramos el proceso para Render
 });
-// Redis connection
+// Redis
 exports.redisClient = (0, redis_1.createClient)({
     url: process.env.REDIS_URL || 'redis://localhost:6379'
 });
@@ -74,11 +75,13 @@ exports.redisClient.on('error', (err) => {
     if (isRedisEnabled)
         console.log('Redis Client Error', err);
 });
-// Test Database Connections
+// Health check
 app.get('/health', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const dbRes = yield exports.pool.query('SELECT NOW()');
-        const redisPing = yield exports.redisClient.ping();
+        let redisPing = 'DISABLED';
+        if (isRedisEnabled)
+            redisPing = yield exports.redisClient.ping();
         res.json({
             status: 'UP',
             time: dbRes.rows[0].now,
@@ -89,10 +92,10 @@ app.get('/health', (req, res) => __awaiter(void 0, void 0, void 0, function* () 
         res.status(500).json({ error: 'System unhealthy' });
     }
 }));
-const cron_service_1 = require("./services/cron.service");
-// Start Server Wrapper
+// Start server
 const startServer = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        // Conectar Redis
         try {
             yield exports.redisClient.connect();
             isRedisEnabled = true;
@@ -102,13 +105,15 @@ const startServer = () => __awaiter(void 0, void 0, void 0, function* () {
             isRedisEnabled = false;
             console.warn('Redis connection failed (Continuing without Redis):', e.message);
         }
+        // Cron jobs
         try {
             (0, cron_service_1.setupCronJobs)();
             console.log('Cron jobs initialized.');
         }
         catch (e) {
-            console.warn('Cron jobs initialized failed:', e.message);
+            console.warn('Cron jobs initialization failed:', e.message);
         }
+        // Test DB
         try {
             const dbTest = yield exports.pool.query('SELECT NOW()');
             console.log('Database connected successfully at:', dbTest.rows[0].now);
@@ -116,7 +121,7 @@ const startServer = () => __awaiter(void 0, void 0, void 0, function* () {
         catch (dbErr) {
             console.error('CRITICAL: Database connection failed:', dbErr.message);
         }
-        // 🔥 CAMBIO IMPORTANTE AQUÍ
+        // Iniciar servidor
         httpServer.listen(PORT, () => {
             console.log(`[server]: Server is running on port ${PORT}`);
         });
