@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { api } from '../../../lib/api';
+import { api } from '../../lib/api';
 import Logo from '@/components/Logo';
 
 function ResetPasswordForm() {
@@ -58,7 +58,7 @@ function ResetPasswordForm() {
     }
 
     try {
-      const data = await api.post('/reset-password', { token, newPassword });
+      const data = await api.post('/auth/reset-password', { token, newPassword });
 
       if (data.error) {
         setError(data.error);

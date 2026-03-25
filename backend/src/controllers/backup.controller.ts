@@ -81,7 +81,10 @@ export const importDatabase = async (req: AuthRequest, res: Response) => {
     try {
         await client.query('BEGIN');
         
-        // 1. Limpiar la base de datos completa con CASCADE 
+        // 1. Desactivar triggers y constraints temporalmente para evitar problemas de dependencias circulares
+        await client.query("SET session_replication_role = 'replica'");
+
+        // 2. Limpiar la base de datos completa con CASCADE 
         await client.query('TRUNCATE TABLE winnings, bet_items, bets, draw_exposure, sinpe_deposits, wallet_transactions, admin_logs, draws, wallets, users CASCADE');
 
         // 2. Insertar en orden estricto para mantener la integridad relacional
@@ -115,6 +118,7 @@ export const importDatabase = async (req: AuthRequest, res: Response) => {
             }
         }
 
+        await client.query("SET session_replication_role = 'origin'");
         await client.query('COMMIT');
         res.status(200).json({ message: 'Base de datos restaurada correctamente.' });
     } catch (error: any) {

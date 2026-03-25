@@ -10,7 +10,8 @@ import {
     deleteFranchise,
     getAdmins,
     createAdmin,
-    updateAdminPermissions
+    updateAdminPermissions,
+    promoteToFranchise
 } from '../controllers/admin.controller';
 import { exportDatabase, importDatabase } from '../controllers/backup.controller';
 import { authenticateJWT, requireRole, requirePermission } from '../middlewares/auth.middleware';
@@ -22,6 +23,7 @@ router.get('/transactions', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE'])
 router.get('/exposure/:lotteryType', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), getRiskExposure);
 router.get('/users', authenticateJWT, requirePermission('players'), getAllPlayers);
 router.put('/users/:id', authenticateJWT, requirePermission('players'), updatePlayer);
+router.put('/promote-franchise/:id', authenticateJWT, requireRole(['ADMIN']), promoteToFranchise);
 router.delete('/users/:id', authenticateJWT, requirePermission('players'), deletePlayer);
 
 // Admin-only franchise management

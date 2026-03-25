@@ -278,3 +278,22 @@ export const createAdmin = async (req: AuthRequest, res: Response) => {
     }
 };
 
+export const promoteToFranchise = async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    try {
+        if (!req.user?.is_master && req.user?.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'No autorizado.' });
+        }
+
+        const result = await pool.query(
+            `UPDATE users SET role = 'FRANCHISE', updated_at = NOW() WHERE id = $1 RETURNING id, full_name`,
+            [id]
+        );
+
+        if (result.rows.length === 0) return res.status(404).json({ error: 'No se encontró el usuario.' });
+        res.json({ message: `¡Usuario ${result.rows[0].full_name} ascendido a FRANQUICIA exitosamente!` });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error del servidor al ascender usuario.' });
+    }
+};

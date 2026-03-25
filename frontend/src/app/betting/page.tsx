@@ -232,13 +232,16 @@ export default function BettingPage() {
                         <button 
                             key={t}
                             onClick={() => handleSelectLottery(t)}
-                            className="group relative h-40 flex flex-col items-center justify-center bg-white/5 border border-white/10 rounded-3xl hover:bg-emerald-500/10 hover:border-emerald-500/50 transition-all active:scale-95 overflow-hidden"
+                            className="group relative h-52 flex flex-col items-center justify-center bg-gradient-to-br from-white/10 to-transparent border border-white/10 rounded-[2.5rem] hover:bg-emerald-500/10 hover:border-emerald-500/50 transition-all duration-300 transform hover:-translate-y-2 hover:scale-[1.02] active:scale-95 overflow-hidden shadow-2xl"
                         >
-                            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-100 transition-opacity">
+                            {/* Animated Background Element */}
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-emerald-500/10 transition-colors"></div>
+                            
+                            <div className="absolute top-4 right-4 p-4 opacity-20 group-hover:opacity-100 transition-opacity">
                                 <span className="text-4xl">{t === 'TICA' ? '🇨🇷' : '🇳🇮'}</span>
                             </div>
-                            <span className="text-5xl font-black text-white tracking-widest group-hover:scale-110 transition-transform">{t}</span>
-                            <span className="text-xs text-gray-500 font-bold uppercase mt-2 group-hover:text-emerald-400">Tiempos {t === 'TICA' ? 'Costa Rica' : 'Nicaragua'}</span>
+                            <span className="text-6xl font-black text-white tracking-[0.2em] group-hover:scale-110 transition-transform drop-shadow-2xl italic">{t}</span>
+                            <span className="text-[10px] text-gray-500 font-black uppercase mt-4 tracking-[0.3em] group-hover:text-emerald-400 transition-colors">Lotería de {t === 'TICA' ? 'Costa Rica' : 'Nicaragua'}</span>
                         </button>
                     ))}
                 </div>
