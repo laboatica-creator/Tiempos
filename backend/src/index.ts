@@ -9,14 +9,19 @@ import { setupCronJobs } from './services/cron.service';
 
 dotenv.config();
 
+console.log('🔧 [1] Dotenv configurado');
+
 const app: Express = express();
 
 // 🔥 Puerto dinámico para Render y fallback 4000 local
 const PORT = process.env.PORT || 4000;
+console.log(`🔧 [2] Puerto configurado: ${PORT}`);
 
+console.log('🔧 [3] Creando servidor HTTP...');
 const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: { origin: '*' } });
 app.set('io', io);
+console.log('🔧 [4] Servidor HTTP y Socket.io creados');
 
 // Socket.io
 io.on('connection', (socket) => {
@@ -24,11 +29,12 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
 });
 
-// Middleware
+console.log('🔧 [5] Configurando middleware...');
+
 // Middleware de CORS dinámico para Vercel
 const allowedOrigins = [
   'http://localhost:3000',
-  'https://tiempos.vercel.app', // Ejemplo de producción
+  'https://tiempos.vercel.app',
   'https://tiempos-frontend.vercel.app',
   /\.vercel\.app$/ // Permitir todas las previews de Vercel
 ];
@@ -45,6 +51,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+console.log('🔧 [6] Middleware configurado');
 
 // Rutas base
 app.get('/', (req: Request, res: Response) => {
@@ -54,6 +61,8 @@ app.get('/', (req: Request, res: Response) => {
     status: 'ACTIVE'
   });
 });
+
+console.log('🔧 [7] Cargando rutas...');
 
 // Routes
 import authRoutes from './routes/auth.route';
@@ -69,18 +78,21 @@ app.use('/api/bets', betRoutes);
 app.use('/api/draws', drawRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/admin', adminRoutes);
+console.log('🔧 [8] Rutas cargadas');
 
 // PostgreSQL
+console.log('🔧 [9] Configurando PostgreSQL...');
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgres://tiempos_user:tiempos_password@localhost:5432/tiempos_db',
 });
 
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
-  // NO cerramos el proceso para Render
 });
+console.log('🔧 [10] PostgreSQL configurado');
 
 // Redis
+console.log('🔧 [11] Configurando Redis...');
 export const redisClient = createClient({
   url: process.env.REDIS_URL || 'redis://localhost:6379'
 });
@@ -89,6 +101,7 @@ let isRedisEnabled = false;
 redisClient.on('error', (err) => {
   if (isRedisEnabled) console.log('Redis Client Error', err);
 });
+console.log('🔧 [12] Redis configurado');
 
 // Health check
 app.get('/health', async (req: Request, res: Response) => {
@@ -106,43 +119,50 @@ app.get('/health', async (req: Request, res: Response) => {
   }
 });
 
+console.log('🔧 [13] Health check configurado');
+
 // Start server
 const startServer = async () => {
+  console.log('🚀 [14] Iniciando servidor...');
+  
   try {
-    // Conectar Redis
+    console.log('📡 [15] Conectando Redis...');
     try {
       await redisClient.connect();
       isRedisEnabled = true;
-      console.log('Redis connected successfully.');
+      console.log('✅ Redis connected successfully.');
     } catch (e) {
       isRedisEnabled = false;
-      console.warn('Redis connection failed (Continuing without Redis):', (e as Error).message);
+      console.warn('⚠️ Redis connection failed (Continuing without Redis):', (e as Error).message);
     }
 
-    // Cron jobs
+    console.log('⏰ [16] Inicializando cron jobs...');
     try {
       setupCronJobs();
-      console.log('Cron jobs initialized.');
+      console.log('✅ Cron jobs initialized.');
     } catch (e) {
-      console.warn('Cron jobs initialization failed:', (e as Error).message);
+      console.warn('⚠️ Cron jobs failed:', (e as Error).message);
     }
 
-    // Test DB
+    console.log('🗄️ [17] Probando base de datos...');
     try {
       const dbTest = await pool.query('SELECT NOW()');
-      console.log('Database connected successfully at:', dbTest.rows[0].now);
+      console.log('✅ Database connected successfully at:', dbTest.rows[0].now);
     } catch (dbErr: any) {
-      console.error('CRITICAL: Database connection failed:', dbErr.message);
+      console.error('❌ CRITICAL: Database connection failed:', dbErr.message);
     }
 
-    // Iniciar servidor
+    console.log(`🌐 [18] Iniciando servidor HTTP en puerto ${PORT}...`);
     httpServer.listen(PORT, () => {
-      console.log(`[server]: Server is running on port ${PORT}`);
+      console.log(`✅ [server]: Server is running on port ${PORT}`);
     });
+    console.log('🔧 [19] httpServer.listen ejecutado (callback registrado)');
 
   } catch (error) {
-    console.error('Failed to start server:', error);
+    console.error('❌ Failed to start server:', error);
   }
 };
 
+console.log('🔧 [20] Llamando a startServer()...');
 startServer();
+console.log('🔧 [21] startServer() llamado (continuará asincrónicamente)');
