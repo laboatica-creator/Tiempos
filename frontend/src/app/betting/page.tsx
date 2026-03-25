@@ -441,6 +441,24 @@ export default function BettingPage() {
             </div>
           </div>
       </aside>
+
+      {/* Mobile Sticky Checkout Bar */}
+      {cart.length > 0 && (
+          <div className="lg:hidden fixed bottom-20 left-4 right-4 z-40 animate-in slide-in-from-bottom-10 duration-500">
+              <div className="bg-emerald-600 p-4 rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.3)] border border-emerald-400/30 flex justify-between items-center">
+                  <div>
+                      <p className="text-[10px] text-emerald-100 font-black uppercase tracking-widest">Total en Carrito ({cart.length})</p>
+                      <p className="text-xl font-black text-white italic">₡{cart.reduce((s,i) => s+i.amount, 0).toLocaleString()}</p>
+                  </div>
+                  <button 
+                    onClick={handleConfirmBet}
+                    className="bg-white text-emerald-600 px-6 py-3 rounded-xl font-black uppercase text-xs tracking-widest active:scale-95 shadow-lg"
+                  >
+                    CONFIRMAR
+                  </button>
+              </div>
+          </div>
+      )}
     </main>
   );
 }

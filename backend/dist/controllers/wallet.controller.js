@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.adjustWalletBalance = exports.deletePaymentMethod = exports.addPaymentMethod = exports.getPaymentMethods = exports.getPendingRecharges = exports.approveRecharge = exports.createSinpeRecharge = exports.getWalletBalance = void 0;
+exports.adjustWalletBalance = exports.deletePaymentMethod = exports.addPaymentMethod = exports.getPaymentMethods = exports.getPendingRecharges = exports.approveRecharge = exports.requestWithdrawal = exports.createSinpeRecharge = exports.getWalletBalance = void 0;
 const index_1 = require("../index");
 const getWalletBalance = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
@@ -54,18 +54,56 @@ const createSinpeRecharge = (req, res) => __awaiter(void 0, void 0, void 0, func
         const result = yield index_1.pool.query(`INSERT INTO sinpe_deposits (user_id, amount, reference_number, receipt_hash, sender_name, method_type) 
              VALUES ($1, $2, $3, $4, $5, $6) 
              RETURNING id, amount, status, created_at`, [userId, amount, reference_number, (ocrResult === null || ocrResult === void 0 ? void 0 : ocrResult.hash) || null, (ocrResult === null || ocrResult === void 0 ? void 0 : ocrResult.senderName) || null, method_type || 'SINPE']);
-        res.status(201).json({
-            message: 'Recharge request created and processed.',
-            recharge: result.rows[0],
-            ocrMatch: ocrResult ? (ocrResult.amount === amount) : null
-        });
+        res.status(201).json({ message: 'Recarga enviada y pendiente de aprobación.' });
     }
     catch (error) {
         console.error('Error creating recharge:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: 'Error interno de servidor' });
     }
 });
 exports.createSinpeRecharge = createSinpeRecharge;
+const requestWithdrawal = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+        const { amount, method, details } = req.body;
+        if (!amount || amount <= 0)
+            return res.status(400).json({ error: 'Monto inválido.' });
+        if (!method || !['SINPE', 'IBAN'].includes(method))
+            return res.status(400).json({ error: 'Método no válido.' });
+        if (method === 'IBAN' && !details)
+            return res.status(400).json({ error: 'Se requiere el número de cuenta IBAN.' });
+        const client = yield index_1.pool.connect();
+        try {
+            yield client.query('BEGIN');
+            const walletRes = yield client.query('SELECT id, balance FROM wallets WHERE user_id = $1 FOR UPDATE', [userId]);
+            if (walletRes.rows.length === 0)
+                throw new Error('Billetera no encontrada');
+            const wallet = walletRes.rows[0];
+            if (Number(wallet.balance) < Number(amount)) {
+                yield client.query('ROLLBACK');
+                return res.status(400).json({ error: 'Fondos insuficientes para solicitar este retiro.' });
+            }
+            // Deduct immediately locally to lock funds (or leave as pending logic, here we deduct to lock)
+            yield client.query(`UPDATE wallets SET balance = balance - $1, updated_at = NOW() WHERE id = $2`, [amount, wallet.id]);
+            yield client.query(`INSERT INTO withdrawal_requests (user_id, amount, method, details, status) VALUES ($1, $2, $3, $4, 'PENDING')`, [userId, amount, method, details || 'SINPE REGISTRADO']);
+            yield client.query('COMMIT');
+            res.status(201).json({ message: 'Solicitud de retiro enviada correctamente. Fondos bloqueados temporalmente.' });
+        }
+        catch (e) {
+            yield client.query('ROLLBACK');
+            res.status(500).json({ error: e.message });
+        }
+        finally {
+            client.release();
+        }
+    }
+    catch (error) {
+        console.error('Error requesting withdrawal:', error);
+        res.status(500).json({ error: 'Error interno de servidor' });
+    }
+});
+exports.requestWithdrawal = requestWithdrawal;
 const approveRecharge = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     const adminId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
@@ -109,14 +147,29 @@ const getPendingRecharges = (req, res) => __awaiter(void 0, void 0, void 0, func
     try {
         const role = (_a = req.user) === null || _a === void 0 ? void 0 : _a.role;
         const userId = (_b = req.user) === null || _b === void 0 ? void 0 : _b.id;
-        let query = `
-            SELECT sd.*, u.full_name as user_name, u.phone_number, u.email 
-            FROM sinpe_deposits sd 
-            JOIN users u ON sd.user_id = u.id 
-            WHERE sd.status = 'PENDING' 
-            ${role === 'FRANCHISE' ? 'AND u.franchise_id = $1' : ''}
-            ORDER BY sd.created_at DESC`;
-        const params = role === 'FRANCHISE' ? [userId] : [];
+        // FRANCHISE sees only their players' deposits
+        // ADMIN sees only non-franchise players (franchise_id IS NULL)
+        let query;
+        let params;
+        if (role === 'FRANCHISE') {
+            query = `
+                SELECT sd.*, u.full_name as user_name, u.phone_number, u.email 
+                FROM sinpe_deposits sd 
+                JOIN users u ON sd.user_id = u.id 
+                WHERE sd.status = 'PENDING' AND u.franchise_id = $1
+                ORDER BY sd.created_at DESC`;
+            params = [userId];
+        }
+        else {
+            // ADMIN: only players NOT assigned to any franchise
+            query = `
+                SELECT sd.*, u.full_name as user_name, u.phone_number, u.email 
+                FROM sinpe_deposits sd 
+                JOIN users u ON sd.user_id = u.id 
+                WHERE sd.status = 'PENDING' AND u.franchise_id IS NULL
+                ORDER BY sd.created_at DESC`;
+            params = [];
+        }
         const result = yield index_1.pool.query(query, params);
         res.json(result.rows);
     }
@@ -208,7 +261,7 @@ const adjustWalletBalance = (req, res) => __awaiter(void 0, void 0, void 0, func
         yield client.query(`UPDATE wallets SET balance = $1, updated_at = NOW() WHERE id = $2`, [newBalance, walletId]);
         // Record Transaction
         yield client.query(`INSERT INTO wallet_transactions (wallet_id, type, amount, description, reference_id) 
-             VALUES ($1, $2, $3, $4, $5)`, [walletId, type === 'CREDIT' ? 'DEPOSIT' : 'WITHDRAWAL', adjustmentAmount, description || `Manual Adjustment by Admin ${adminId}`, adminId]);
+             VALUES ($1, $2, $3, $4, $5)`, [walletId, type === 'CREDIT' ? 'DEPOSIT' : 'WITHDRAW', adjustmentAmount, description || `Manual Adjustment by Admin ${adminId}`, adminId]);
         yield client.query('COMMIT');
         res.json({ message: 'Balance adjusted successfully', newBalance });
     }

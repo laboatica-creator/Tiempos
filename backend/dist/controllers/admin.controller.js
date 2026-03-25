@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteFranchise = exports.getAllFranchises = exports.getRiskExposure = exports.deletePlayer = exports.updatePlayer = exports.getAllPlayers = exports.getRecentTransactions = exports.getDashboardStats = void 0;
+exports.promoteToFranchise = exports.createAdmin = exports.updateAdminPermissions = exports.getAdmins = exports.deleteFranchise = exports.getAllFranchises = exports.getRiskExposure = exports.deletePlayer = exports.updatePlayer = exports.getAllPlayers = exports.getRecentTransactions = exports.getDashboardStats = void 0;
 const index_1 = require("../index");
 const getDashboardStats = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b;
@@ -17,14 +17,14 @@ const getDashboardStats = (req, res) => __awaiter(void 0, void 0, void 0, functi
         const role = (_a = req.user) === null || _a === void 0 ? void 0 : _a.role;
         const userId = (_b = req.user) === null || _b === void 0 ? void 0 : _b.id;
         const today = new Date().toISOString().split('T')[0];
-        let salesQuery = `SELECT SUM(total_amount) as total FROM bets WHERE created_at::date = $1`;
+        let salesQuery = `SELECT SUM(total_amount) as total FROM bets WHERE created_at::date = $1 AND status != 'CANCELLED'`;
         let winQuery = `SELECT SUM(amount) as total FROM winnings WHERE created_at::date = $1`;
         let userQuery = `SELECT COUNT(*) as total FROM users WHERE role = 'CUSTOMER'`;
         let sinpeQuery = `SELECT COUNT(*) as total FROM sinpe_deposits WHERE status = 'PENDING'`;
         const queryParams = [today];
         const noParamQuery = [];
         if (role === 'FRANCHISE') {
-            salesQuery = `SELECT SUM(b.total_amount) as total FROM bets b JOIN users u ON b.user_id = u.id WHERE b.created_at::date = $1 AND u.franchise_id = $2`;
+            salesQuery = `SELECT SUM(b.total_amount) as total FROM bets b JOIN users u ON b.user_id = u.id WHERE b.created_at::date = $1 AND u.franchise_id = $2 AND b.status != 'CANCELLED'`;
             winQuery = `SELECT SUM(w.amount) as total FROM winnings w JOIN users u ON w.user_id = u.id WHERE w.created_at::date = $1 AND u.franchise_id = $2`;
             userQuery = `SELECT COUNT(*) as total FROM users WHERE role = 'CUSTOMER' AND franchise_id = $1`;
             sinpeQuery = `SELECT COUNT(*) as total FROM sinpe_deposits sd JOIN users u ON sd.user_id = u.id WHERE sd.status = 'PENDING' AND u.franchise_id = $1`;
@@ -51,16 +51,37 @@ exports.getDashboardStats = getDashboardStats;
 const getRecentTransactions = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b;
     try {
+        const { startDate, endDate, player, type } = req.query;
         const role = (_a = req.user) === null || _a === void 0 ? void 0 : _a.role;
-        const userId = (_b = req.user) === null || _b === void 0 ? void 0 : _b.id;
+        const currentUserId = (_b = req.user) === null || _b === void 0 ? void 0 : _b.id;
         let query = `
              SELECT wt.*, u.full_name as user_name 
              FROM wallet_transactions wt
              JOIN wallets w ON wt.wallet_id = w.id
              JOIN users u ON w.user_id = u.id
-             ${role === 'FRANCHISE' ? 'WHERE u.franchise_id = $1' : ''}
-             ORDER BY wt.created_at DESC LIMIT 10`;
-        const queryParams = role === 'FRANCHISE' ? [userId] : [];
+             WHERE 1=1 `;
+        const queryParams = [];
+        if (role === 'FRANCHISE') {
+            queryParams.push(currentUserId);
+            query += ` AND u.franchise_id = $${queryParams.length}`;
+        }
+        if (startDate) {
+            queryParams.push(startDate);
+            query += ` AND wt.created_at::date >= $${queryParams.length}`;
+        }
+        if (endDate) {
+            queryParams.push(endDate);
+            query += ` AND wt.created_at::date <= $${queryParams.length}`;
+        }
+        if (player) {
+            queryParams.push(`%${player}%`);
+            query += ` AND (u.full_name ILIKE $${queryParams.length} OR u.email ILIKE $${queryParams.length} OR u.phone_number ILIKE $${queryParams.length})`;
+        }
+        if (type && type !== 'ALL') {
+            queryParams.push(type);
+            query += ` AND wt.type = $${queryParams.length}::tx_type`;
+        }
+        query += ` ORDER BY wt.created_at DESC LIMIT 100`;
         const result = yield index_1.pool.query(query, queryParams);
         res.json(result.rows);
     }
@@ -129,11 +150,11 @@ const getRiskExposure = (req, res) => __awaiter(void 0, void 0, void 0, function
             return res.json({ exposure: {} });
         }
         const drawId = drawRes.rows[0].id;
-        const exposureRes = yield index_1.pool.query(`SELECT number, SUM(amount) as total_amount 
+        const exposureRes = yield index_1.pool.query(`SELECT bi.number, SUM(bi.amount) as total_amount 
              FROM bet_items bi
              JOIN bets b ON bi.bet_id = b.id
-             WHERE b.draw_id = $1
-             GROUP BY number`, [drawId]);
+             WHERE b.draw_id = $1 AND b.status != 'CANCELLED'
+             GROUP BY bi.number`, [drawId]);
         const exposureMap = {};
         exposureRes.rows.forEach(row => {
             exposureMap[row.number] = parseFloat(row.total_amount);
@@ -182,3 +203,77 @@ const deleteFranchise = (req, res) => __awaiter(void 0, void 0, void 0, function
     }
 });
 exports.deleteFranchise = deleteFranchise;
+const getAdmins = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        if (!((_a = req.user) === null || _a === void 0 ? void 0 : _a.is_master)) {
+            return res.status(403).json({ error: 'Sólo el Administrador Maestro puede ver esta lista.' });
+        }
+        const result = yield index_1.pool.query(`SELECT id, full_name, email, is_active, is_master, permissions, created_at FROM users WHERE role = 'ADMIN' ORDER BY is_master DESC, created_at DESC`);
+        res.json(result.rows);
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+exports.getAdmins = getAdmins;
+const updateAdminPermissions = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { id } = req.params;
+        const { permissions, is_active } = req.body;
+        if (!((_a = req.user) === null || _a === void 0 ? void 0 : _a.is_master)) {
+            return res.status(403).json({ error: 'No autorizado. Se requiere nivel maestro.' });
+        }
+        const result = yield index_1.pool.query(`UPDATE users SET permissions = $1, is_active = $2, updated_at = NOW() WHERE id = $3 AND role = 'ADMIN' AND is_master = FALSE RETURNING id`, [JSON.stringify(permissions), is_active, id]);
+        if (result.rows.length === 0)
+            return res.status(404).json({ error: 'Administrador no encontrado o es el maestro.' });
+        res.json({ message: 'Permisos actualizados correctamente.' });
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al actualizar permisos.' });
+    }
+});
+exports.updateAdminPermissions = updateAdminPermissions;
+const createAdmin = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    const { full_name, email, password, permissions } = req.body;
+    try {
+        if (!((_a = req.user) === null || _a === void 0 ? void 0 : _a.is_master)) {
+            return res.status(403).json({ error: 'No autorizado.' });
+        }
+        const bcrypt = require('bcrypt');
+        const password_hash = yield bcrypt.hash(password, 10);
+        const result = yield index_1.pool.query(`INSERT INTO users (full_name, email, password_hash, role, permissions, national_id, phone_number, date_of_birth) 
+             VALUES ($1, $2, $3, 'ADMIN', $4, 'ADM-' || encode(gen_random_bytes(4), 'hex'), '506-' || encode(gen_random_bytes(4), 'hex'), '2000-01-01') 
+             RETURNING id`, [full_name, email, password_hash, JSON.stringify(permissions)]);
+        res.status(201).json({ message: 'Nuevo administrador creado exitosamente.', id: result.rows[0].id });
+    }
+    catch (error) {
+        console.error('Error creating admin:', error);
+        if (error.code === '23505')
+            return res.status(409).json({ error: 'El correo electrónico ya está en uso.' });
+        res.status(500).json({ error: 'Error interno al crear administrador.' });
+    }
+});
+exports.createAdmin = createAdmin;
+const promoteToFranchise = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
+    const { id } = req.params;
+    try {
+        if (!((_a = req.user) === null || _a === void 0 ? void 0 : _a.is_master) && ((_b = req.user) === null || _b === void 0 ? void 0 : _b.role) !== 'ADMIN') {
+            return res.status(403).json({ error: 'No autorizado.' });
+        }
+        const result = yield index_1.pool.query(`UPDATE users SET role = 'FRANCHISE', updated_at = NOW() WHERE id = $1 RETURNING id, full_name`, [id]);
+        if (result.rows.length === 0)
+            return res.status(404).json({ error: 'No se encontró el usuario.' });
+        res.json({ message: `¡Usuario ${result.rows[0].full_name} ascendido a FRANQUICIA exitosamente!` });
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error del servidor al ascender usuario.' });
+    }
+});
+exports.promoteToFranchise = promoteToFranchise;

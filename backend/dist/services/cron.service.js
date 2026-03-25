@@ -27,13 +27,10 @@ const initializeDailyDraws = () => __awaiter(void 0, void 0, void 0, function* (
         for (let i = 0; i <= 7; i++) {
             const date = new Date();
             date.setDate(date.getDate() + i);
-            const dateStr = date.toISOString().split('T')[0];
+            const dateStr = date.toLocaleDateString('en-CA');
             const dayOfWeek = date.getDay(); // 0 is Sunday, 6 is Saturday
-            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
             const ticaTimes = ['13:00:00', '16:00:00', '19:30:00'];
-            const nicaTimes = isWeekend
-                ? ['12:00:00', '15:00:00', '18:00:00', '21:00:00']
-                : ['12:00:00', '15:00:00', '21:00:00'];
+            const nicaTimes = ['15:00:00', '18:00:00', '21:00:00'];
             for (const time of ticaTimes) {
                 yield client.query(`INSERT INTO draws (lottery_type, draw_date, draw_time, status)
                      SELECT 'TICA', $1, $2, 'OPEN'
@@ -65,19 +62,21 @@ const closeBetsBeforeDraw = () => __awaiter(void 0, void 0, void 0, function* ()
     // This is run every minute.
     try {
         const client = yield index_1.pool.connect();
+        // Pass current local date/time from common node context to avoid DB timezone issues.
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-CA'); // YYYY-MM-DD format
+        const timeStr = now.toTimeString().split(' ')[0]; // HH:mm:ss
         // Find draws that are 'OPEN' and their draw_time is < 20 minutes from now.
-        // PostgreSql time comparison requires casting correctly.
         const res = yield client.query(`
             UPDATE draws
             SET status = 'CLOSED'
             WHERE status = 'OPEN' 
-            AND draw_date = CURRENT_DATE
-            AND draw_time - LOCALTIME < interval '20 minutes'
+            AND draw_date = $1
+            AND draw_time::time - $2::time < interval '20 minutes'
             RETURNING id, lottery_type, draw_time;
-        `);
+        `, [dateStr, timeStr]);
         if (res.rows.length > 0) {
-            console.log(`Auto-closed ${res.rows.length} draws 20 minutes before time.`);
-            // Optionally, emit websocket event that draw is locked.
+            console.log(`[cron]: Auto-closed ${res.rows.length} draws for date ${dateStr}. Current time: ${timeStr}`);
         }
         client.release();
     }

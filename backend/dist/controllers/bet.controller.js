@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getUserBets = exports.getNumberExposure = exports.placeBet = void 0;
+exports.cancelBet = exports.getUserBets = exports.getNumberExposure = exports.placeBet = void 0;
 const index_1 = require("../index");
 const email_service_1 = require("../services/email.service");
 const MAX_BET_PER_NUMBER_PER_USER = 20000;
@@ -139,13 +139,13 @@ const getUserBets = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
     const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
     try {
         const result = yield index_1.pool.query(`SELECT b.id as bet_id, b.total_amount, b.status as bet_status, b.created_at,
-                    d.lottery_type, d.draw_date, d.draw_time, d.status as draw_status,
+                    b.draw_id, d.lottery_type, d.draw_date, d.draw_time, d.status as draw_status,
                     bi.number, bi.amount, bi.status as item_status
              FROM bets b
              JOIN draws d ON b.draw_id = d.id
              JOIN bet_items bi ON bi.bet_id = b.id
              WHERE b.user_id = $1
-             ORDER BY d.draw_date DESC, d.draw_time DESC`, [userId]);
+             ORDER BY d.draw_date ASC, d.draw_time ASC`, [userId]);
         res.json(result.rows);
     }
     catch (error) {
@@ -154,3 +154,64 @@ const getUserBets = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
     }
 });
 exports.getUserBets = getUserBets;
+const cancelBet = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+    const { betId } = req.params;
+    const client = yield index_1.pool.connect();
+    try {
+        yield client.query('BEGIN');
+        // 1. Fetch bet and verify ownership + draw status
+        const betRes = yield client.query(`SELECT b.*, d.status as draw_status, d.draw_date, d.draw_time 
+             FROM bets b 
+             JOIN draws d ON b.draw_id = d.id 
+             WHERE b.id = $1 AND b.user_id = $2`, [betId, userId]);
+        if (betRes.rows.length === 0) {
+            yield client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Bet not found or access denied.' });
+        }
+        const bet = betRes.rows[0];
+        if (bet.status !== 'ACTIVE') {
+            yield client.query('ROLLBACK');
+            return res.status(400).json({ error: `Cannot cancel a bet with status ${bet.status}` });
+        }
+        if (bet.draw_status !== 'OPEN') {
+            yield client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Cannot cancel a bet for a closed or finished draw.' });
+        }
+        // 20 minute check
+        const now = new Date();
+        const [h, m] = bet.draw_time.split(':').map(Number);
+        const drawDate = new Date(bet.draw_date);
+        drawDate.setHours(h, m, 0, 0);
+        const diff = (drawDate.getTime() - now.getTime()) / (1000 * 60);
+        if (diff < 20) {
+            yield client.query('ROLLBACK');
+            return res.status(400).json({ error: 'No se puede anular o modificar una jugada a menos de 20 minutos del sorteo.' });
+        }
+        // 2. Refund wallet
+        const walletRes = yield client.query(`UPDATE wallets SET balance = balance + $1, updated_at = NOW() WHERE user_id = $2 RETURNING id`, [bet.total_amount, userId]);
+        // Record transaction
+        yield client.query(`INSERT INTO wallet_transactions (wallet_id, type, amount, description, reference_id) 
+             VALUES ($1, 'REFUND', $2, 'Bet Cancelled', $3)`, [walletRes.rows[0].id, bet.total_amount, betId]);
+        // 3. Update Draw Exposure
+        const itemsRes = yield client.query(`SELECT number, amount FROM bet_items WHERE bet_id = $1`, [betId]);
+        for (const item of itemsRes.rows) {
+            yield client.query(`UPDATE draw_exposure SET current_exposure = current_exposure - $1 WHERE draw_id = $2 AND number = $3`, [item.amount, bet.draw_id, item.number]);
+        }
+        // 4. Update status
+        yield client.query(`UPDATE bets SET status = 'CANCELLED' WHERE id = $1`, [betId]);
+        yield client.query(`UPDATE bet_items SET status = 'CANCELLED' WHERE bet_id = $1`, [betId]);
+        yield client.query('COMMIT');
+        res.json({ message: 'Bet cancelled and refunded successfully.' });
+    }
+    catch (error) {
+        yield client.query('ROLLBACK');
+        console.error('Error cancelling bet:', error);
+        res.status(500).json({ error: 'Internal server error while cancelling bet.' });
+    }
+    finally {
+        client.release();
+    }
+});
+exports.cancelBet = cancelBet;

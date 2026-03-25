@@ -3,31 +3,50 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { Pool } from 'pg';
 import { createClient } from 'redis';
-
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import { setupCronJobs } from './services/cron.service';
 
 dotenv.config();
 
 const app: Express = express();
-const port = process.env.PORT || 4000;
+
+// 🔥 Puerto dinámico para Render y fallback 4000 local
+const PORT = process.env.PORT || 4000;
 
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: { origin: '*' }
-});
+const io = new Server(httpServer, { cors: { origin: '*' } });
 app.set('io', io);
 
+// Socket.io
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
   socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
 });
 
 // Middleware
-app.use(cors());
+// Middleware de CORS dinámico para Vercel
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://tiempos.vercel.app', // Ejemplo de producción
+  'https://tiempos-frontend.vercel.app',
+  /\.vercel\.app$/ // Permitir todas las previews de Vercel
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.some(ao => typeof ao === 'string' ? ao === origin : ao.test(origin))) {
+      callback(null, true);
+    } else {
+      callback(new Error('Origin not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Rutas base
 app.get('/', (req: Request, res: Response) => {
   res.json({
     message: 'Welcome to Tiempos Pro API',
@@ -51,17 +70,17 @@ app.use('/api/draws', drawRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Database connection (PostgreSQL)
+// PostgreSQL
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgres://tiempos_user:tiempos_password@localhost:5432/tiempos_db',
 });
 
 pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
-  process.exit(-1);
+  // NO cerramos el proceso para Render
 });
 
-// Redis connection
+// Redis
 export const redisClient = createClient({
   url: process.env.REDIS_URL || 'redis://localhost:6379'
 });
@@ -71,11 +90,12 @@ redisClient.on('error', (err) => {
   if (isRedisEnabled) console.log('Redis Client Error', err);
 });
 
-// Test Database Connections
+// Health check
 app.get('/health', async (req: Request, res: Response) => {
   try {
     const dbRes = await pool.query('SELECT NOW()');
-    const redisPing = await redisClient.ping();
+    let redisPing = 'DISABLED';
+    if (isRedisEnabled) redisPing = await redisClient.ping();
     res.json({
       status: 'UP',
       time: dbRes.rows[0].now,
@@ -86,11 +106,10 @@ app.get('/health', async (req: Request, res: Response) => {
   }
 });
 
-import { setupCronJobs } from './services/cron.service';
-
-// Start Server Wrapper
+// Start server
 const startServer = async () => {
   try {
+    // Conectar Redis
     try {
       await redisClient.connect();
       isRedisEnabled = true;
@@ -99,14 +118,16 @@ const startServer = async () => {
       isRedisEnabled = false;
       console.warn('Redis connection failed (Continuing without Redis):', (e as Error).message);
     }
-    
+
+    // Cron jobs
     try {
       setupCronJobs();
       console.log('Cron jobs initialized.');
     } catch (e) {
-      console.warn('Cron jobs initialized failed:', (e as Error).message);
+      console.warn('Cron jobs initialization failed:', (e as Error).message);
     }
 
+    // Test DB
     try {
       const dbTest = await pool.query('SELECT NOW()');
       console.log('Database connected successfully at:', dbTest.rows[0].now);
@@ -114,9 +135,11 @@ const startServer = async () => {
       console.error('CRITICAL: Database connection failed:', dbErr.message);
     }
 
-    httpServer.listen(port, () => {
-      console.log(`[server]: Server is running at http://localhost:${port}`);
+    // Iniciar servidor
+    httpServer.listen(PORT, () => {
+      console.log(`[server]: Server is running on port ${PORT}`);
     });
+
   } catch (error) {
     console.error('Failed to start server:', error);
   }

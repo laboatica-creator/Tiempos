@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getDraws = exports.setWinningNumber = exports.createDraw = void 0;
+exports.cancelDraw = exports.getDraws = exports.setWinningNumber = exports.createDraw = void 0;
 const index_1 = require("../index");
 const email_service_1 = require("../services/email.service");
 // Formula: bet_amount * 90
@@ -99,15 +99,13 @@ const getDraws = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const result = yield index_1.pool.query(`SELECT d.*, COALESCE(SUM(b.total_amount), 0) as total_sold
              FROM draws d
-             LEFT JOIN bets b ON d.id = b.draw_id
+             LEFT JOIN bets b ON d.id = b.draw_id AND b.status != 'CANCELLED'
              GROUP BY d.id
              ORDER BY 
-                 CASE WHEN d.status = 'OPEN' THEN 0 ELSE 1 END ASC,
-                 CASE WHEN d.status = 'OPEN' THEN d.draw_date END ASC,
-                 CASE WHEN d.status = 'OPEN' THEN d.draw_time END ASC,
-                 CASE WHEN d.status != 'OPEN' THEN d.draw_date END DESC,
-                 CASE WHEN d.status != 'OPEN' THEN d.draw_time END DESC
-             LIMIT 100`);
+                 d.draw_date ASC,
+                 d.draw_time ASC,
+                 CASE WHEN d.status = 'OPEN' THEN 0 WHEN d.status = 'CLOSED' THEN 1 ELSE 2 END ASC
+             LIMIT 500`);
         res.json(result.rows);
     }
     catch (error) {
@@ -116,3 +114,45 @@ const getDraws = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     }
 });
 exports.getDraws = getDraws;
+const cancelDraw = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { drawId } = req.params;
+    const client = yield index_1.pool.connect();
+    try {
+        yield client.query('BEGIN');
+        // 1. Get Draw info and ensure it's cancelable
+        const drawRes = yield client.query(`SELECT * FROM draws WHERE id = $1`, [drawId]);
+        if (drawRes.rows.length === 0) {
+            yield client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Draw not found.' });
+        }
+        const draw = drawRes.rows[0];
+        if (draw.status === 'FINISHED' || draw.status === 'CANCELLED') {
+            yield client.query('ROLLBACK');
+            return res.status(400).json({ error: `Cannot cancel a draw with status ${draw.status}` });
+        }
+        // 2. Find all active bets for this draw to refund
+        const betsToRefund = yield client.query(`SELECT id, user_id, total_amount FROM bets WHERE draw_id = $1 AND status = 'ACTIVE'`, [drawId]);
+        for (const bet of betsToRefund.rows) {
+            // Refund wallet
+            const walletRes = yield client.query(`UPDATE wallets SET balance = balance + $1, updated_at = NOW() WHERE user_id = $2 RETURNING id`, [bet.total_amount, bet.user_id]);
+            // Record transaction
+            yield client.query(`INSERT INTO wallet_transactions (wallet_id, type, amount, description, reference_id) 
+                 VALUES ($1, 'REFUND', $2, $3, $4)`, [walletRes.rows[0].id, bet.total_amount, `Refund for cancelled draw: ${draw.lottery_type} ${draw.draw_time}`, bet.id]);
+            // Update bet status
+            yield client.query(`UPDATE bets SET status = 'CANCELLED' WHERE id = $1`, [bet.id]);
+        }
+        // 3. Update draw status
+        yield client.query(`UPDATE draws SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`, [drawId]);
+        yield client.query('COMMIT');
+        res.json({ message: 'Draw cancelled successfully and all bets refunded.', refundedBets: betsToRefund.rows.length });
+    }
+    catch (error) {
+        yield client.query('ROLLBACK');
+        console.error('Error cancelling draw:', error);
+        res.status(500).json({ error: 'Internal server error while cancelling draw.' });
+    }
+    finally {
+        client.release();
+    }
+});
+exports.cancelDraw = cancelDraw;

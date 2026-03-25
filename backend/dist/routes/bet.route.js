@@ -10,4 +10,6 @@ router.get('/my', auth_middleware_1.authenticateJWT, bet_controller_1.getUserBet
 router.post('/place', auth_middleware_1.authenticateJWT, bet_controller_1.placeBet);
 // Get real-time heat-map exposure for a specific draw
 router.get('/exposure/:draw_id', auth_middleware_1.authenticateJWT, bet_controller_1.getNumberExposure);
+// Cancel a bet (Refunds money)
+router.post('/cancel/:betId', auth_middleware_1.authenticateJWT, bet_controller_1.cancelBet);
 exports.default = router;

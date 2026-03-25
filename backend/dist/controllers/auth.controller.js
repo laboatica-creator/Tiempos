@@ -54,9 +54,18 @@ const registerUser = (req, res) => __awaiter(void 0, void 0, void 0, function* (
         catch (mailErr) {
             console.warn('Error enviando correo de bienvenida:', mailErr);
         }
+        // Generate token for auto-login
+        const token = jsonwebtoken_1.default.sign({
+            id: newUser.id,
+            role: newUser.role,
+            is_master: false,
+            franchise_id: newUser.franchise_id,
+            agent_id: newUser.agent_id
+        }, JWT_SECRET, { expiresIn: '24h' });
         res.status(201).json({
             message: 'Usuario registrado exitosamente',
-            user: newUser
+            user: newUser,
+            token
         });
     }
     catch (error) {
@@ -99,6 +108,8 @@ const loginUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         const token = jsonwebtoken_1.default.sign({
             id: user.id,
             role: user.role,
+            is_master: user.is_master || false,
+            permissions: user.permissions || [],
             franchise_id: user.franchise_id,
             agent_id: user.agent_id
         }, JWT_SECRET, { expiresIn: '24h' });
@@ -109,6 +120,8 @@ const loginUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                 id: user.id,
                 full_name: user.full_name,
                 role: user.role,
+                is_master: user.is_master || false,
+                permissions: user.permissions || [],
                 email: user.email,
                 phone: user.phone_number
             }

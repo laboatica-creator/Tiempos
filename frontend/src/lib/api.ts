@@ -1,11 +1,14 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+const isProd = process.env.NODE_ENV === 'production';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || (isProd ? '/api' : 'http://localhost:4000/api');
 
 export const api = {
-  async get(endpoint: string, token?: string) {
+  async get(endpoint: string, token?: string | null) {
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     try {
-      const res = await fetch(`${API_URL}${endpoint}`, {
+      const res = await fetch(`${API_URL}${cleanEndpoint}`, {
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json'
         },
       });
       const contentType = res.headers.get('content-type');

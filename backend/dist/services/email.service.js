@@ -19,26 +19,31 @@ dotenv_1.default.config();
 // Configura tu servicio de correo en el archivo .env
 // Ejemplo para Gmail o Namecheap privado
 const transporter = nodemailer_1.default.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '465'),
-    secure: process.env.SMTP_SECURE === 'true' || true, // true para port 465, false para otros
+    host: process.env.SMTP_HOST || 'smtp.office365.com',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true', // false para port 587
     auth: {
-        user: process.env.SMTP_USER || 'tucorreo@gmail.com',
-        pass: process.env.SMTP_PASSWORD || 'tu_contraseña_de_aplicacion',
+        user: process.env.SMTP_USER || 'laboatica@hotmail.com',
+        pass: process.env.SMTP_PASSWORD || 'Les1419055@',
     },
+    tls: {
+        ciphers: 'SSLv3',
+        rejectUnauthorized: false
+    }
 });
 const sendEmail = (to, subject, html) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const fromEmail = process.env.SMTP_USER || 'laboatica@hotmail.com';
         yield transporter.sendMail({
-            from: `"Tiempos Betting" <${process.env.SMTP_USER || 'tucorreo@gmail.com'}>`,
+            from: `"Tiempos Tica y Nica" <${fromEmail}>`,
             to,
             subject,
             html,
         });
-        console.log(`Email enviado a ${to} con asunto: ${subject}`);
+        console.log(`[Email]: Enviado a ${to} con asunto: ${subject}`);
     }
     catch (error) {
-        console.error(`Error enviando email a ${to}:`, error);
+        console.error(`[Email Error]: Fallo al enviar a ${to}:`, error);
     }
 });
 exports.sendEmail = sendEmail;
