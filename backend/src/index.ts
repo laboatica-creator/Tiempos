@@ -1,3 +1,4 @@
+import { runMigrations } from './database/migrate';
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -82,17 +83,8 @@ console.log('🔧 [8] Rutas cargadas');
 
 // PostgreSQL 🔥 CON SSL PARA RENDER
 console.log('🔧 [9] Configurando PostgreSQL...');
-export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgres://tiempos_user:tiempos_password@localhost:5432/tiempos_db',
-  connectionTimeoutMillis: 5000,
-  ssl: {
-    rejectUnauthorized: false  // 🔥 Necesario para Render PostgreSQL
-  }
-});
-
-pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
-});
+import { pool } from './database/db';
+export { pool };
 console.log('🔧 [10] PostgreSQL configurado');
 
 // ⚠️ REDIS DESHABILITADO - exportamos null para compatibilidad
@@ -126,6 +118,14 @@ const startServer = async () => {
       console.log('✅ Cron jobs initialized.');
     } catch (e) {
       console.warn('⚠️ Cron jobs failed:', (e as Error).message);
+    }
+
+    console.log('🗄️ [16.5] Ejecutando migraciones...');
+    try {
+      await runMigrations();
+      console.log('✅ Migraciones completadas.');
+    } catch (migErr: any) {
+      console.error('⚠️ Migraciones fallidas (continuando):', migErr.message);
     }
 
     console.log('🗄️ [17] Probando base de datos...');
