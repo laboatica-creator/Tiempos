@@ -13,10 +13,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.redisClient = exports.pool = void 0;
+const migrate_1 = require("./database/migrate");
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
-const pg_1 = require("pg");
 const http_1 = require("http");
 const socket_io_1 = require("socket.io");
 const cron_service_1 = require("./services/cron.service");
@@ -84,16 +84,8 @@ app.use('/api/admin', admin_route_1.default);
 console.log('🔧 [8] Rutas cargadas');
 // PostgreSQL 🔥 CON SSL PARA RENDER
 console.log('🔧 [9] Configurando PostgreSQL...');
-exports.pool = new pg_1.Pool({
-    connectionString: process.env.DATABASE_URL || 'postgres://tiempos_user:tiempos_password@localhost:5432/tiempos_db',
-    connectionTimeoutMillis: 5000,
-    ssl: {
-        rejectUnauthorized: false // 🔥 Necesario para Render PostgreSQL
-    }
-});
-exports.pool.on('error', (err) => {
-    console.error('Unexpected error on idle client', err);
-});
+const db_1 = require("./database/db");
+Object.defineProperty(exports, "pool", { enumerable: true, get: function () { return db_1.pool; } });
 console.log('🔧 [10] PostgreSQL configurado');
 // ⚠️ REDIS DESHABILITADO - exportamos null para compatibilidad
 exports.redisClient = null;
@@ -101,7 +93,7 @@ const isRedisEnabled = false;
 // Health check (sin Redis)
 app.get('/health', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const dbRes = yield exports.pool.query('SELECT NOW()');
+        const dbRes = yield db_1.pool.query('SELECT NOW()');
         res.json({
             status: 'UP',
             time: dbRes.rows[0].now,
@@ -125,9 +117,17 @@ const startServer = () => __awaiter(void 0, void 0, void 0, function* () {
         catch (e) {
             console.warn('⚠️ Cron jobs failed:', e.message);
         }
+        console.log('🗄️ [16.5] Ejecutando migraciones...');
+        try {
+            yield (0, migrate_1.runMigrations)();
+            console.log('✅ Migraciones completadas.');
+        }
+        catch (migErr) {
+            console.error('⚠️ Migraciones fallidas (continuando):', migErr.message);
+        }
         console.log('🗄️ [17] Probando base de datos...');
         try {
-            const dbTest = yield exports.pool.query('SELECT NOW()');
+            const dbTest = yield db_1.pool.query('SELECT NOW()');
             console.log('✅ Database connected successfully at:', dbTest.rows[0].now);
         }
         catch (dbErr) {
