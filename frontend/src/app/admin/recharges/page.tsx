@@ -76,6 +76,23 @@ export default function AdminRechargesPage() {
     }
   };
 
+  const handleReject = async (r: Recharge) => {
+    const note = prompt(`¿Por qué desea rechazar la recarga de ₡${Number(r.amount).toLocaleString()}?`, "Información de comprobante no concuerda");
+    if (note === null) return;
+    try {
+      const token = sessionStorage.getItem('token');
+      const data = await api.post(`/wallet/recharge/${r.id}/reject`, { note }, token);
+      if (data.error) {
+        alert(data.error);
+      } else {
+        alert(`❌ Recarga de ₡${Number(r.amount).toLocaleString()} rechazada.`);
+        fetchRecharges();
+      }
+    } catch (err) {
+      alert('Error al rechazar recarga.');
+    }
+  };
+
   if (!isMounted) return null;
 
   return (
@@ -129,6 +146,12 @@ export default function AdminRechargesPage() {
                   <td className="px-8 py-6 text-gray-500 text-[10px] font-bold uppercase">{new Date(r.created_at).toLocaleString()}</td>
                   <td className="px-8 py-6 text-right">
                     <div className="flex justify-end gap-3 items-center">
+                      <button
+                        onClick={() => handleReject(r)}
+                        className="py-3 px-6 bg-red-500/10 border border-red-500/20 text-red-500 font-black rounded-2xl hover:bg-red-500/20 transition-all active:scale-95 uppercase text-[10px]"
+                      >
+                        Rechazar
+                      </button>
                       <button
                         onClick={() => handleApprove(r)}
                         className="py-3 px-6 bg-emerald-500 text-white font-black rounded-2xl hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20 active:scale-95 uppercase text-xs"

@@ -26,7 +26,7 @@ import { OCRService } from '../services/ocr.service';
 export const createSinpeRecharge = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
-        const { amount, reference_number, receipt_image_url, method_type } = req.body;
+        const { amount, reference_number, receipt_image_url, method_type, bank_name } = req.body;
 
         if (!reference_number) {
             return res.status(400).json({ error: 'Referencia requerida.' });
@@ -51,10 +51,10 @@ export const createSinpeRecharge = async (req: AuthRequest, res: Response) => {
         }
 
         const result = await pool.query(
-            `INSERT INTO sinpe_deposits (user_id, amount, reference_number, receipt_hash, sender_name, method_type) 
-             VALUES ($1, $2, $3, $4, $5, $6) 
+            `INSERT INTO sinpe_deposits (user_id, amount, reference_number, receipt_hash, sender_name, method_type, bank_name) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7) 
              RETURNING id, amount, status, created_at`,
-            [userId, amount, reference_number, ocrResult?.hash || null, ocrResult?.senderName || null, method_type || 'SINPE']
+            [userId, amount, reference_number, ocrResult?.hash || null, ocrResult?.senderName || null, method_type || 'SINPE', bank_name || 'SINPE MOVIL']
         );
 
         res.status(201).json({ message: 'Recarga enviada y pendiente de aprobación.' });
@@ -167,6 +167,22 @@ export const approveRecharge = async (req: AuthRequest, res: Response) => {
         res.status(500).json({ error: 'Internal server error' });
     } finally {
         client.release();
+    }
+};
+
+export const rejectRecharge = async (req: AuthRequest, res: Response) => {
+    const { rechargeId } = req.params;
+    const { note } = req.body;
+    try {
+        const result = await pool.query(
+            `UPDATE sinpe_deposits SET status = 'REJECTED', processed_at = NOW() WHERE id = $1 AND status = 'PENDING' RETURNING *`,
+            [rechargeId]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Recharge not found or already processed' });
+        res.json({ message: 'Recharge rejected successfully.' });
+    } catch (error) {
+        console.error('Error rejecting recharge:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 };
 

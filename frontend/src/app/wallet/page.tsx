@@ -12,6 +12,7 @@ export default function WalletPage() {
     const [uploading, setUploading] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
     const [systemSettings, setSystemSettings] = useState<any>({});
+    const [loadingSettings, setLoadingSettings] = useState(true);
     const [methods, setMethods] = useState<any[]>([]);
     const [selectedMethod, setSelectedMethod] = useState<'SINPE' | 'CARD'>('SINPE');
     const [showAddCard, setShowAddCard] = useState(false);
@@ -20,6 +21,7 @@ export default function WalletPage() {
     const [withdrawalMethod, setWithdrawalMethod] = useState<'SINPE' | 'IBAN'>('SINPE');
     const [iban, setIban] = useState('');
     const [withdrawing, setWithdrawing] = useState(false);
+    const [selectedBank, setSelectedBank] = useState('');
 
     useEffect(() => {
         setIsMounted(true);
@@ -41,7 +43,10 @@ export default function WalletPage() {
             if (wallet && !wallet.error) setBalance(Number(wallet.balance) || 0);
             if (Array.isArray(m)) setMethods(m);
             if (settings && !settings.error) setSystemSettings(settings);
-            if (Array.isArray(txs)) setTransactions(txs);
+            if (Array.isArray(txs)) {
+                setTransactions(txs);
+                setLoadingSettings(false);
+            }
 
         } catch (err) {
             console.error(err);
@@ -62,7 +67,8 @@ export default function WalletPage() {
             const data = await api.post('/wallet/recharge', {
                 amount: Number(amount),
                 reference_number: selectedMethod === 'SINPE' ? ref : `CARD-${methods[0].last4}`,
-                method_type: selectedMethod
+                method_type: selectedMethod,
+                bank_name: selectedBank
             }, token);
             
             if (data.error) {
@@ -282,10 +288,26 @@ export default function WalletPage() {
                                                         <span className="text-emerald-400 font-bold">{s.owner}</span>
                                                     </div>
                                                 </div>
-                                            )) : (
-                                                <div className="p-4 text-center text-gray-500 text-xs italic">Cargando cuentas...</div>
+                                            )) : loadingSettings ? (
+                                                <div className="p-4 text-center text-gray-500 text-[10px] font-black uppercase animate-pulse">Cargando cuentas...</div>
+                                            ) : (
+                                                <div className="p-4 text-center text-red-400 text-[10px] font-black uppercase">No hay cuentas configuradas</div>
                                             )}
                                         </div>
+
+                                        {/* Dynamic Support WhatsApp Button */}
+                                        {systemSettings.whatsapp_support && (
+                                            <div className="pt-4 border-t border-white/5">
+                                                <a 
+                                                    href={`https://wa.me/${JSON.parse(systemSettings.whatsapp_support).replace(/\D/g, '')}`} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center justify-center gap-3 w-full py-4 bg-[#25D366]/10 border border-[#25D366]/20 text-[#25D366] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#25D366]/20 transition-all shadow-[0_0_15px_rgba(37,211,102,0.1)]"
+                                                >
+                                                    <span className="text-lg">📲</span> SOPORTE VÍA WHATSAPP
+                                                </a>
+                                            </div>
+                                        )}
                                         
                                         <form onSubmit={handleRecharge} className="space-y-6 border-t border-white/5 pt-6">
                                             <div className="space-y-2">
@@ -301,6 +323,20 @@ export default function WalletPage() {
                                                         required
                                                     />
                                                 </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Banco Destino</label>
+                                                <select 
+                                                    value={selectedBank}
+                                                    onChange={(e) => setSelectedBank(e.target.value)}
+                                                    className="w-full bg-white/5 border border-white/10 py-4 px-6 rounded-2xl text-white font-black text-lg outline-none focus:border-emerald-500 transition-all appearance-none"
+                                                    required
+                                                >
+                                                    <option value="">Seleccione el Banco</option>
+                                                    {sinpeNumbers.map((s: any, idx: number) => (
+                                                        <option key={idx} value={s.bank}>{s.bank} - {s.owner}</option>
+                                                    ))}
+                                                </select>
                                             </div>
                                             <div className="space-y-2">
                                                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-4">Referencia de Transferencia</label>

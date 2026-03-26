@@ -3,6 +3,7 @@ import {
     getWalletBalance, 
     createSinpeRecharge, 
     approveRecharge, 
+    rejectRecharge,
     getPendingRecharges,
     adjustWalletBalance,
     getPaymentMethods,
@@ -26,6 +27,7 @@ router.delete('/methods/:methodId', authenticateJWT, deletePaymentMethod);
 
 // Admin/Franchise routes
 router.post('/recharge/:rechargeId/approve', authenticateJWT, requirePermission('recharges'), approveRecharge);
+router.post('/recharge/:rechargeId/reject', authenticateJWT, requirePermission('recharges'), rejectRecharge);
 router.post('/adjust', authenticateJWT, requirePermission('recharges'), adjustWalletBalance);
 router.get('/pending', authenticateJWT, requirePermission('recharges'), getPendingRecharges);
 

@@ -149,6 +149,9 @@ export const runMigrations = async () => {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    // Ensure missing columns in sinpe_deposits
+    await client.query(`ALTER TABLE sinpe_deposits ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100) NULL`);
+    await client.query(`ALTER TABLE sinpe_deposits ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP WITH TIME ZONE NULL`);
     console.log('✅ [Migration] Table sinpe_deposits ensured');
 
     // WITHDRAWAL REQUESTS

@@ -156,18 +156,14 @@ export default function LoginPage() {
              <button 
                 onClick={() => {
                     sessionStorage.clear();
-                    window.location.href = 'about:blank';
+                    window.location.href = '/logout-success';
                 }}
                 className="w-full py-3 bg-red-500/10 border border-red-500/20 text-red-500 font-black rounded-xl hover:bg-red-500/20 transition-all flex items-center justify-center gap-2 uppercase tracking-[0.2em] text-[10px]"
              >
                 🔚 SALIDA / EXIT
              </button>
              <div className="opacity-30 space-y-2">
-                 <p className="text-[10px] text-gray-500 font-mono">USUARIO SEGURO - SSL ENCRYPTED</p>
-                 <div className="flex justify-between items-center text-[7px] font-black tracking-widest text-emerald-500/50 uppercase">
-                    <span>ADMIN: laboatica@hotmail.com</span>
-                    <span>PLAYER: juan@gmail.com</span>
-                 </div>
+                 <p className="text-[10px] text-gray-500 font-mono italic">PLATAFORMA 100% SEGURA - SSL ENCRYPTED</p>
                  <p className="text-[9px] text-gray-700 font-black uppercase tracking-[0.3em] mt-4">Copyright © J. Leslie V.</p>
              </div>
           </div>

@@ -15,7 +15,7 @@ import {
     getSystemSettings,
     updateSystemSettings
 } from '../controllers/admin.controller';
-import { approveRecharge, getPendingRecharges, adjustWalletBalance, getPendingWithdrawals, approveWithdrawal } from '../controllers/wallet.controller';
+import { approveRecharge, rejectRecharge, getPendingRecharges, adjustWalletBalance, getPendingWithdrawals, approveWithdrawal } from '../controllers/wallet.controller';
 import { exportDatabase, importDatabase } from '../controllers/backup.controller';
 import { authenticateJWT, requireRole, requirePermission } from '../middlewares/auth.middleware';
 
@@ -32,6 +32,7 @@ router.put('/promote-franchise/:id', authenticateJWT, requireRole(['ADMIN']), pr
 // Deposits/Recharges
 router.get('/deposits', authenticateJWT, requirePermission('recharges'), getPendingRecharges);
 router.post('/deposits/:rechargeId/approve', authenticateJWT, requirePermission('recharges'), approveRecharge);
+router.post('/deposits/:rechargeId/reject', authenticateJWT, requirePermission('recharges'), rejectRecharge);
 
 // Withdrawals
 router.get('/withdrawals', authenticateJWT, requirePermission('recharges'), getPendingWithdrawals);
