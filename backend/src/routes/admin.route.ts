@@ -41,7 +41,7 @@ router.post('/withdrawals/:withdrawalId/process', authenticateJWT, requirePermis
 router.post('/wallets/adjust', authenticateJWT, requirePermission('recharges'), adjustWalletBalance);
 
 // Settings
-router.get('/settings', authenticateJWT, requireRole(['ADMIN']), getSystemSettings);
+router.get('/settings', authenticateJWT, getSystemSettings);
 router.post('/settings', authenticateJWT, requireRole(['ADMIN']), updateSystemSettings);
 
 // Admin-only franchise management

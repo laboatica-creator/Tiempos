@@ -140,7 +140,8 @@ export default function WalletPage() {
 
     const sinpeNumbers = systemSettings.sinpe_numbers ? JSON.parse(systemSettings.sinpe_numbers) : [];
     const whatsappLink = (refCode: string, amt: string) => {
-        const phone = systemSettings.whatsapp_support ? JSON.parse(systemSettings.whatsapp_support) : '';
+        const rawPhone = systemSettings.whatsapp_support ? JSON.parse(systemSettings.whatsapp_support) : '';
+        const phone = rawPhone.replace(/\D/g, ''); // Sanitize to numeric only for URL
         if (!phone) return null;
         const msg = encodeURIComponent(`Hola, acabo de realizar un SINPE por ₡${amt}. Ref: ${refCode}. Por favor acreditar a mi cuenta.`);
         return `https://wa.me/${phone}?text=${msg}`;

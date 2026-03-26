@@ -319,7 +319,9 @@ export const getSystemSettings = async (req: AuthRequest, res: Response) => {
 export const updateSystemSettings = async (req: AuthRequest, res: Response) => {
     const { key, value } = req.body;
     try {
-        if (!req.user?.is_master) return res.status(403).json({ error: 'Solo el administrador maestro puede cambiar configuraciones globales.' });
+        if (req.user?.role !== 'ADMIN' && !req.user?.is_master) {
+            return res.status(403).json({ error: 'Solo el administrador puede cambiar configuraciones globales.' });
+        }
         
         await pool.query(
             `INSERT INTO system_settings (key, value, updated_at) VALUES ($1, $2, NOW())

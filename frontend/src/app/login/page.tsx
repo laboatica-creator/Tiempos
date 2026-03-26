@@ -118,13 +118,39 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-10 text-center space-y-6">
-          <p className="text-gray-600 text-xs font-medium tracking-wide">
-            ¿Aún no te has afiliado? <Link href="/register" className="text-emerald-400 font-black hover:underline">Regístrate ahora</Link>
-          </p>
-          <p className="text-gray-600 text-xs font-medium tracking-wide">
-            ¿Olvidaste tu contraseña? <Link href="/forgot-password" className="text-emerald-400 font-black hover:underline">Recupérala aquí</Link>
-          </p>
+        <div className="mt-10 text-center space-y-8 animate-in fade-in slide-in-from-bottom-5 duration-700 delay-300">
+          <div className="flex flex-col items-center gap-4">
+            <Link 
+              href="/register" 
+              className="group flex gap-1 items-center transition-transform hover:scale-105"
+            >
+              {"REGÍSTRATE AQUÍ".split("").map((char, i) => (
+                <span 
+                  key={i} 
+                  className={`text-2xl md:text-3xl font-black italic uppercase tracking-tighter inline-block ${
+                    char === " " ? "mx-1" : ""
+                  } ${
+                    [
+                      "text-emerald-400 -rotate-12 -translate-y-1",
+                      "text-yellow-400 rotate-6 translate-y-1",
+                      "text-rose-400 -rotate-6 -translate-y-0.5",
+                      "text-blue-400 rotate-12 translate-y-0.5",
+                      "text-orange-400 rotate-12 translate-y-1",
+                      "text-indigo-400 -rotate-6 -translate-y-0.5",
+                      "text-pink-400 rotate-6 translate-y-0.5",
+                      "text-teal-400 -rotate-12 -translate-y-1"
+                    ][i % 8]
+                  } group-hover:drop-shadow-[0_0_10px_rgba(255,255,255,0.4)] transition-all`}
+                >
+                  {char}
+                </span>
+              ))}
+            </Link>
+          </div>
+          
+          <div className="text-gray-600 text-[10px] font-bold tracking-widest uppercase">
+            ¿Olvidaste tu contraseña? <Link href="/forgot-password" className="text-emerald-400 hover:text-white transition-colors">Recuperar</Link>
+          </div>
           
           <div className="pt-6 border-t border-white/5 space-y-4">
              <button 
@@ -139,9 +165,10 @@ export default function LoginPage() {
              <div className="opacity-30 space-y-2">
                  <p className="text-[10px] text-gray-500 font-mono">USUARIO SEGURO - SSL ENCRYPTED</p>
                  <div className="flex justify-between items-center text-[7px] font-black tracking-widest text-emerald-500/50 uppercase">
-                    <span>ADMIN: laboarica@hotmail.com</span>
-                    <span>PLAYER: usuario@tiempos.com</span>
+                    <span>ADMIN: laboatica@hotmail.com</span>
+                    <span>PLAYER: juan@gmail.com</span>
                  </div>
+                 <p className="text-[9px] text-gray-700 font-black uppercase tracking-[0.3em] mt-4">Copyright © J. Leslie V.</p>
              </div>
           </div>
         </div>
