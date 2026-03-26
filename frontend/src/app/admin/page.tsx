@@ -214,9 +214,9 @@ export default function AdminDashboardPage() {
           <Link href="/admin/results" className="flex-1 lg:flex-none py-3 px-6 sm:py-4 sm:px-8 bg-gradient-to-r from-emerald-500 to-emerald-400 text-white font-black rounded-xl sm:rounded-2xl hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] hover:scale-105 transition-all text-center uppercase text-[10px] sm:text-xs tracking-widest active:scale-95">
             Gestionar Sorteos
           </Link>
-          <button className="flex-1 lg:flex-none py-3 px-6 sm:py-4 sm:px-8 bg-white/5 border border-white/10 text-gray-300 font-black rounded-xl sm:rounded-2xl hover:bg-white/10 hover:text-white transition-all uppercase text-[10px] sm:text-xs tracking-widest active:scale-95">
+          <Link href="/admin/reports" className="flex-1 lg:flex-none py-3 px-6 sm:py-4 sm:px-8 bg-white/5 border border-white/10 text-gray-300 font-black rounded-xl sm:rounded-2xl hover:bg-white/10 hover:text-white transition-all uppercase text-[10px] sm:text-xs tracking-widest active:scale-95 text-center">
             Reporte
-          </button>
+          </Link>
         </div>
       </header>
 

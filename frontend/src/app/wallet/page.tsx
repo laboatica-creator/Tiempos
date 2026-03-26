@@ -144,10 +144,24 @@ export default function WalletPage() {
 
     if (!isMounted) return null;
 
-    const sinpeNumbers = systemSettings.sinpe_numbers ? JSON.parse(systemSettings.sinpe_numbers) : [];
+    const sinpeNumbers = Array.isArray(systemSettings.sinpe_numbers) 
+        ? systemSettings.sinpe_numbers 
+        : systemSettings.sinpe_numbers 
+            ? JSON.parse(systemSettings.sinpe_numbers) 
+            : [];
+
     const whatsappLink = (refCode: string, amt: string) => {
-        const rawPhone = systemSettings.whatsapp_support ? JSON.parse(systemSettings.whatsapp_support) : '';
-        const phone = rawPhone.replace(/\D/g, ''); // Sanitize to numeric only for URL
+        let phone = '';
+        if (systemSettings.whatsapp_support) {
+            try {
+                const raw = typeof systemSettings.whatsapp_support === 'string' 
+                    ? JSON.parse(systemSettings.whatsapp_support) 
+                    : systemSettings.whatsapp_support;
+                phone = String(raw).replace(/\D/g, '');
+            } catch (e) {
+                phone = String(systemSettings.whatsapp_support).replace(/\D/g, '');
+            }
+        }
         if (!phone) return null;
         const msg = encodeURIComponent(`Hola, acabo de realizar un SINPE por ₡${amt}. Ref: ${refCode}. Por favor acreditar a mi cuenta.`);
         return `https://wa.me/${phone}?text=${msg}`;

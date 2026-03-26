@@ -13,7 +13,8 @@ import {
     updateAdminPermissions,
     promoteToFranchise,
     getSystemSettings,
-    updateSystemSettings
+    updateSystemSettings,
+    getSalesReport
 } from '../controllers/admin.controller';
 import { approveRecharge, rejectRecharge, getPendingRecharges, adjustWalletBalance, getPendingWithdrawals, approveWithdrawal } from '../controllers/wallet.controller';
 import { exportDatabase, importDatabase } from '../controllers/backup.controller';
@@ -22,6 +23,7 @@ import { authenticateJWT, requireRole, requirePermission } from '../middlewares/
 const router = Router();
 
 router.get('/stats', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), getDashboardStats);
+router.get('/stats/report', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), getSalesReport);
 router.get('/transactions', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), getRecentTransactions);
 router.get('/exposure/:lotteryType', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), getRiskExposure);
 router.get('/users', authenticateJWT, requirePermission('players'), getAllPlayers);

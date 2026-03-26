@@ -335,3 +335,29 @@ export const updateSystemSettings = async (req: AuthRequest, res: Response) => {
     }
 };
 
+export const getSalesReport = async (req: AuthRequest, res: Response) => {
+    try {
+        const { startDate, endDate } = req.query;
+        let query = `
+            SELECT b.lottery_type, SUM(b.total_amount) as total_sales, COUNT(*) as count 
+            FROM bets b
+            WHERE b.status != 'CANCELLED'
+        `;
+        const params: any[] = [];
+        if (startDate) {
+            params.push(startDate);
+            query += ` AND b.created_at::date >= $${params.length}`;
+        }
+        if (endDate) {
+            params.push(endDate);
+            query += ` AND b.created_at::date <= $${params.length}`;
+        }
+        query += ` GROUP BY b.lottery_type ORDER BY b.lottery_type`;
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching sales report:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
