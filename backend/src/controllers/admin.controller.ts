@@ -17,21 +17,24 @@ export const getDashboardStats = async (req: AuthRequest, res: Response) => {
 
         const queryParams: any[] = [today];
         const noParamQuery: any[] = [];
+        const withdrawParams: any[] = [];
 
         if (role === 'FRANCHISE') {
             salesQuery = `SELECT SUM(b.total_amount) as total FROM bets b JOIN users u ON b.user_id = u.id WHERE b.created_at::date = $1 AND u.franchise_id = $2 AND b.status != 'CANCELLED'`;
             winQuery = `SELECT SUM(w.amount) as total FROM winnings w JOIN users u ON w.user_id = u.id WHERE w.created_at::date = $1 AND u.franchise_id = $2`;
             userQuery = `SELECT COUNT(*) as total FROM users WHERE role = 'CUSTOMER' AND franchise_id = $1`;
             sinpeQuery = `SELECT COUNT(*) as total FROM sinpe_deposits sd JOIN users u ON sd.user_id = u.id WHERE sd.status = 'PENDING' AND u.franchise_id = $1`;
+            withdrawQuery = `SELECT COUNT(*) as total FROM withdrawal_requests wr JOIN users u ON wr.user_id = u.id WHERE wr.status = 'PENDING' AND u.franchise_id = $1`;
             queryParams.push(userId);
             noParamQuery.push(userId);
+            withdrawParams.push(userId);
         }
 
         const salesRes = await pool.query(salesQuery, queryParams);
         const winningsRes = await pool.query(winQuery, queryParams);
         const usersRes = await pool.query(userQuery, noParamQuery);
         const pendingSinpe = await pool.query(sinpeQuery, noParamQuery);
-        const pendingWithdrawals = await pool.query(withdrawQuery, []);
+        const pendingWithdrawals = await pool.query(withdrawQuery, withdrawParams);
 
         res.json({
             todaySales: salesRes.rows[0].total || 0,

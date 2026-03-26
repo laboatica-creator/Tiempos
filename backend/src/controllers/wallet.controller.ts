@@ -180,9 +180,9 @@ export const rejectRecharge = async (req: AuthRequest, res: Response) => {
         );
         if (result.rows.length === 0) return res.status(404).json({ error: 'Recharge not found or already processed' });
         res.json({ message: 'Recharge rejected successfully.' });
-    } catch (error) {
-        console.error('Error rejecting recharge:', error);
-        res.status(500).json({ error: 'Internal server error' });
+    } catch (error: any) {
+        console.error('❌ [WALLET_REJECT_ERROR]:', error.message, error.stack);
+        res.status(500).json({ error: 'Error del servidor al rechazar la recarga: ' + error.message });
     }
 };
 
@@ -387,18 +387,48 @@ export const approveWithdrawal = async (req: AuthRequest, res: Response) => {
     }
 };
 
-export const getDepositHistory = async (req: AuthRequest, res: Response) => {
+export const getWalletHistory = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
+        
+        // Combine pending SINPE deposits and actual wallet transactions
         const result = await pool.query(
-            `SELECT * FROM sinpe_deposits WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
+            `
+            (SELECT 
+                amount, 
+                'SINPE' as type, 
+                status, 
+                created_at, 
+                method_type,
+                reference_number as details
+             FROM sinpe_deposits 
+             WHERE user_id = $1)
+            UNION ALL
+            (SELECT 
+                amount, 
+                type::text, 
+                'COMPLETED' as status, 
+                created_at, 
+                'WALLET' as method_type,
+                '' as details
+             FROM wallet_transactions wt
+             JOIN wallets w ON wt.wallet_id = w.id
+             WHERE w.user_id = $1)
+            ORDER BY created_at DESC LIMIT 50
+            `,
             [userId]
         );
+        
         res.json(result.rows);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error fetching history' });
+        console.error('Error fetching wallet history:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
+};
+
+export const getDepositHistory = async (req: AuthRequest, res: Response) => {
+    // Legacy support or specific use
+    getWalletHistory(req, res);
 };
 
 export const getWinningsHistory = async (req: AuthRequest, res: Response) => {

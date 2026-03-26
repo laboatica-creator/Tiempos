@@ -48,8 +48,9 @@ export default function WalletPage() {
                 setLoadingSettings(false);
             }
 
-        } catch (err) {
-            console.error(err);
+        } catch (err: any) {
+            console.error('❌ [WALLET_FETCH_ERROR]:', err);
+            setLoadingSettings(false);
         }
     };
 
