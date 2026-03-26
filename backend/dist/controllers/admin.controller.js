@@ -16,11 +16,13 @@ const getDashboardStats = (req, res) => __awaiter(void 0, void 0, void 0, functi
     try {
         const role = (_a = req.user) === null || _a === void 0 ? void 0 : _a.role;
         const userId = (_b = req.user) === null || _b === void 0 ? void 0 : _b.id;
-        const today = new Date().toISOString().split('T')[0];
+        // Ensure today is the local date in Costa Rica
+        const today = new Date().toLocaleDateString('en-CA');
         let salesQuery = `SELECT SUM(total_amount) as total FROM bets WHERE created_at::date = $1 AND status != 'CANCELLED'`;
         let winQuery = `SELECT SUM(amount) as total FROM winnings WHERE created_at::date = $1`;
         let userQuery = `SELECT COUNT(*) as total FROM users WHERE role = 'CUSTOMER'`;
         let sinpeQuery = `SELECT COUNT(*) as total FROM sinpe_deposits WHERE status = 'PENDING'`;
+        let withdrawQuery = `SELECT COUNT(*) as total FROM withdrawal_requests WHERE status = 'PENDING'`;
         const queryParams = [today];
         const noParamQuery = [];
         if (role === 'FRANCHISE') {
@@ -35,11 +37,13 @@ const getDashboardStats = (req, res) => __awaiter(void 0, void 0, void 0, functi
         const winningsRes = yield index_1.pool.query(winQuery, queryParams);
         const usersRes = yield index_1.pool.query(userQuery, noParamQuery);
         const pendingSinpe = yield index_1.pool.query(sinpeQuery, noParamQuery);
+        const pendingWithdrawals = yield index_1.pool.query(withdrawQuery, []);
         res.json({
             todaySales: salesRes.rows[0].total || 0,
             todayWinnings: winningsRes.rows[0].total || 0,
             totalUsers: usersRes.rows[0].total || 0,
-            pendingSinpe: pendingSinpe.rows[0].total || 0
+            pendingSinpe: pendingSinpe.rows[0].total || 0,
+            pendingWithdrawals: pendingWithdrawals.rows[0].total || 0
         });
     }
     catch (error) {
