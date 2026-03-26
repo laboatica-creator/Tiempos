@@ -297,3 +297,35 @@ export const promoteToFranchise = async (req: AuthRequest, res: Response) => {
         res.status(500).json({ error: 'Error del servidor al ascender usuario.' });
     }
 };
+
+export const getSystemSettings = async (req: AuthRequest, res: Response) => {
+    try {
+        const result = await pool.query(`SELECT * FROM system_settings`);
+        const settings: Record<string, any> = {};
+        result.rows.forEach(row => {
+            settings[row.key] = row.value;
+        });
+        res.json(settings);
+    } catch (error) {
+        console.error('Error fetching settings:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+export const updateSystemSettings = async (req: AuthRequest, res: Response) => {
+    const { key, value } = req.body;
+    try {
+        if (!req.user?.is_master) return res.status(403).json({ error: 'Solo el administrador maestro puede cambiar configuraciones globales.' });
+        
+        await pool.query(
+            `INSERT INTO system_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+            [key, JSON.stringify(value)]
+        );
+        res.json({ message: `Configuración '${key}' actualizada exitosamente.` });
+    } catch (error) {
+        console.error('Error updating settings:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+

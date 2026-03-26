@@ -72,9 +72,11 @@ import betRoutes from './routes/bet.route';
 import drawRoutes from './routes/draw.route';
 import whatsappRoutes from './routes/whatsapp.route';
 import adminRoutes from './routes/admin.route';
+import userRoutes from './routes/user.route';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/wallet', walletRoutes);
+app.use('/api/user', userRoutes);
 app.use('/api/bets', betRoutes);
 app.use('/api/draws', drawRoutes);
 app.use('/api/whatsapp', whatsappRoutes);

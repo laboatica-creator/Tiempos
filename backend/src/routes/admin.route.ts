@@ -11,8 +11,11 @@ import {
     getAdmins,
     createAdmin,
     updateAdminPermissions,
-    promoteToFranchise
+    promoteToFranchise,
+    getSystemSettings,
+    updateSystemSettings
 } from '../controllers/admin.controller';
+import { approveRecharge, getPendingRecharges, adjustWalletBalance, getPendingWithdrawals, approveWithdrawal } from '../controllers/wallet.controller';
 import { exportDatabase, importDatabase } from '../controllers/backup.controller';
 import { authenticateJWT, requireRole, requirePermission } from '../middlewares/auth.middleware';
 
@@ -23,8 +26,23 @@ router.get('/transactions', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE'])
 router.get('/exposure/:lotteryType', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), getRiskExposure);
 router.get('/users', authenticateJWT, requirePermission('players'), getAllPlayers);
 router.put('/users/:id', authenticateJWT, requirePermission('players'), updatePlayer);
-router.put('/promote-franchise/:id', authenticateJWT, requireRole(['ADMIN']), promoteToFranchise);
 router.delete('/users/:id', authenticateJWT, requirePermission('players'), deletePlayer);
+router.put('/promote-franchise/:id', authenticateJWT, requireRole(['ADMIN']), promoteToFranchise);
+
+// Deposits/Recharges
+router.get('/deposits', authenticateJWT, requirePermission('recharges'), getPendingRecharges);
+router.post('/deposits/:rechargeId/approve', authenticateJWT, requirePermission('recharges'), approveRecharge);
+
+// Withdrawals
+router.get('/withdrawals', authenticateJWT, requirePermission('recharges'), getPendingWithdrawals);
+router.post('/withdrawals/:withdrawalId/process', authenticateJWT, requirePermission('recharges'), approveWithdrawal);
+
+// Wallets
+router.post('/wallets/adjust', authenticateJWT, requirePermission('recharges'), adjustWalletBalance);
+
+// Settings
+router.get('/settings', authenticateJWT, requireRole(['ADMIN']), getSystemSettings);
+router.post('/settings', authenticateJWT, requireRole(['ADMIN']), updateSystemSettings);
 
 // Admin-only franchise management
 router.get('/franchises', authenticateJWT, requireRole(['ADMIN']), getAllFranchises);
@@ -40,3 +58,4 @@ router.post('/backup/export', authenticateJWT, requireRole(['ADMIN']), exportDat
 router.post('/backup/import', authenticateJWT, requireRole(['ADMIN']), importDatabase);
 
 export default router;
+

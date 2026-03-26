@@ -321,3 +321,84 @@ export const adjustWalletBalance = async (req: AuthRequest, res: Response) => {
         client.release();
     }
 };
+
+export const getPendingWithdrawals = async (req: AuthRequest, res: Response) => {
+    try {
+        const result = await pool.query(
+            `SELECT wr.*, u.full_name, u.phone_number, u.email 
+             FROM withdrawal_requests wr 
+             JOIN users u ON wr.user_id = u.id 
+             WHERE wr.status = 'PENDING' ORDER BY wr.created_at DESC`
+        );
+        res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error fetching withdrawals' });
+    }
+};
+
+export const approveWithdrawal = async (req: AuthRequest, res: Response) => {
+    const { withdrawalId } = req.params;
+    const { status, admin_notes } = req.body; // APPROVED or REJECTED
+    const adminId = req.user?.id;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const withdrawalRes = await client.query(`SELECT * FROM withdrawal_requests WHERE id = $1 FOR UPDATE`, [withdrawalId]);
+        if (withdrawalRes.rows.length === 0) throw new Error('Retiro no encontrado.');
+        const withdrawal = withdrawalRes.rows[0];
+
+        if (withdrawal.status !== 'PENDING') throw new Error('Este retiro ya fue procesado.');
+
+        if (status === 'REJECTED') {
+            // Refund the wallet since we locked funds on request (see requestWithdrawal)
+            await client.query(`UPDATE wallets SET balance = balance + $1 WHERE user_id = $2`, [withdrawal.amount, withdrawal.user_id]);
+        }
+
+        await client.query(
+            `UPDATE withdrawal_requests SET status = $1, processed_by = $2, admin_notes = $3, updated_at = NOW() WHERE id = $4`,
+            [status, adminId, admin_notes, withdrawalId]
+        );
+
+        await client.query('COMMIT');
+        res.json({ message: `Retiro ${status.toLowerCase()} correctamente.` });
+    } catch (e: any) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ error: e.message });
+    } finally {
+        client.release();
+    }
+};
+
+export const getDepositHistory = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const result = await pool.query(
+            `SELECT * FROM sinpe_deposits WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
+            [userId]
+        );
+        res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error fetching history' });
+    }
+};
+
+export const getWinningsHistory = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const result = await pool.query(
+            `SELECT w.*, d.lottery_type, d.draw_date, d.draw_time 
+             FROM winnings w 
+             JOIN draws d ON w.draw_id = d.id 
+             WHERE w.user_id = $1 ORDER BY w.created_at DESC`,
+            [userId]
+        );
+        res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error fetching winnings' });
+    }
+};
+
