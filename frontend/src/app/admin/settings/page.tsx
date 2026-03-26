@@ -29,14 +29,25 @@ export default function AdminSettingsPage() {
     try {
       const token = sessionStorage.getItem('token');
       const data = await api.get('/admin/settings', token);
-      if (data) {
-        if (data.whatsapp_support) setWhatsapp(JSON.parse(data.whatsapp_support));
+      if (data && !data.error) {
+        if (data.whatsapp_support) {
+          try {
+            const raw = typeof data.whatsapp_support === 'string' ? JSON.parse(data.whatsapp_support) : data.whatsapp_support;
+            setWhatsapp(String(raw));
+          } catch (e) {
+            setWhatsapp(String(data.whatsapp_support));
+          }
+        }
         if (data.sinpe_numbers) {
-            const list = JSON.parse(data.sinpe_numbers);
-            if (Array.isArray(list)) {
-                const newList = [...list];
-                while(newList.length < 3) newList.push({ number: '', bank: '', owner: '' });
-                setSinpeList(newList.slice(0, 3));
+            try {
+              const list = typeof data.sinpe_numbers === 'string' ? JSON.parse(data.sinpe_numbers) : data.sinpe_numbers;
+              if (Array.isArray(list)) {
+                  const newList = [...list];
+                  while(newList.length < 3) newList.push({ number: '', bank: '', owner: '' });
+                  setSinpeList(newList.slice(0, 3));
+              }
+            } catch (e) {
+              console.error('Error parsing sinpe_numbers:', e);
             }
         }
       }

@@ -1,41 +1,49 @@
 const { Pool } = require('pg');
-const dotenv = require('dotenv');
-dotenv.config();
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: 'postgresql://tiempos_user:F7qM8btv5Xc2nRIix2MtUKBXreIfc9TE@dpg-d724fae3jp1c738p3o70-a.oregon-postgres.render.com/tiempos_n5xb',
   ssl: { rejectUnauthorized: false }
 });
 
-async function runFix() {
-  console.log('🚀 Iniciando parche de base de datos...');
+async function runPatch() {
+  console.log('🔧 Ejecutando parche de base de datos...');
+  
   const client = await pool.connect();
+  
   try {
-    console.log('📦 Verificando columnas en sinpe_deposits...');
-    await client.query(`ALTER TABLE sinpe_deposits ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100) NULL`);
-    await client.query(`ALTER TABLE sinpe_deposits ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP WITH TIME ZONE NULL`);
-    
-    console.log('📦 Verificando tabla withdrawal_requests...');
+    // Agregar columna processed_at a sinpe_deposits
     await client.query(`
-      CREATE TABLE IF NOT EXISTS withdrawal_requests (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID NOT NULL REFERENCES users(id),
-        amount DECIMAL(15, 2) NOT NULL,
-        method VARCHAR(20) NOT NULL,
-        details TEXT,
-        status VARCHAR(20) DEFAULT 'PENDING',
-        processed_at TIMESTAMP WITH TIME ZONE NULL,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      )
+      ALTER TABLE sinpe_deposits 
+      ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP WITH TIME ZONE
     `);
+    console.log('✅ Columna processed_at agregada a sinpe_deposits');
     
-    console.log('✅ Base de datos actualizada correctamente.');
-  } catch (err) {
-    console.error('❌ Error actualizando base de datos:', err.message);
+    // Verificar otras columnas necesarias
+    const tables = ['withdrawal_requests', 'winnings', 'commissions'];
+    for (const table of tables) {
+      const result = await client.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = $1 AND column_name = 'processed_at'
+      `, [table]);
+      
+      if (result.rows.length === 0) {
+        await client.query(`
+          ALTER TABLE ${table} 
+          ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP WITH TIME ZONE
+        `);
+        console.log(`✅ Columna processed_at agregada a ${table}`);
+      }
+    }
+    
+    console.log('🎉 Parche completado exitosamente');
+    
+  } catch (error) {
+    console.error('❌ Error en parche:', error.message);
   } finally {
     client.release();
     await pool.end();
   }
 }
 
-runFix();
+runPatch();
