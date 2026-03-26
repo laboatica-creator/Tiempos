@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { api } from '../../lib/api';
 
 export default function AdminDashboardPage() {
-  const [stats, setStats] = useState({ todaySales: 0, todayWinnings: 0, totalUsers: 0, pendingSinpe: 0 });
+  const [stats, setStats] = useState({ todaySales: 0, todayWinnings: 0, totalUsers: 0, pendingSinpe: 0, pendingWithdrawals: 0 });
   const [transactions, setTransactions] = useState<any[]>([]);
   const [ticaExposure, setTicaExposure] = useState<Record<string, number>>({});
   const [nicaExposure, setNicaExposure] = useState<Record<string, number>>({});
@@ -162,10 +162,11 @@ export default function AdminDashboardPage() {
   if (!isMounted) return null;
 
   const displayStats = [
-    { name: 'Ventas (Hoy)', value: `₡${Number(stats?.todaySales || 0).toLocaleString()}`, color: 'text-emerald-400' },
-    { name: 'Usuarios Totales', value: (stats?.totalUsers ?? 0).toString(), color: 'text-blue-400' },
-    { name: 'Premios (Hoy)', value: `₡${Number(stats?.todayWinnings || 0).toLocaleString()}`, color: 'text-red-400' },
-    { name: 'SINPE Pendientes', value: (stats?.pendingSinpe ?? 0).toString(), color: 'text-purple-400' },
+    { name: 'Ventas (Hoy)', value: `₡${Number(stats?.todaySales || 0).toLocaleString()}`, color: 'text-emerald-400', link: null },
+    { name: 'Usuarios Totales', value: (stats?.totalUsers ?? 0).toString(), color: 'text-blue-400', link: '/admin/players' },
+    { name: 'Premios (Hoy)', value: `₡${Number(stats?.todayWinnings || 0).toLocaleString()}`, color: 'text-red-400', link: null },
+    { name: 'SINPE Pendientes', value: (stats?.pendingSinpe ?? 0).toString(), color: 'text-purple-400', link: '/admin/recharges' },
+    { name: 'Retiros Pendientes', value: (stats?.pendingWithdrawals ?? 0).toString(), color: 'text-amber-400', link: '/admin/withdrawals' },
   ];
 
   return (
@@ -218,7 +219,7 @@ export default function AdminDashboardPage() {
       </header>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
         {displayStats.map((stat, i) => {
           const colors = [
             'from-emerald-500/20 to-emerald-900/10 border-emerald-500/30 text-emerald-400 shadow-emerald-500/5',
@@ -228,14 +229,22 @@ export default function AdminDashboardPage() {
           ];
           const colorClass = colors[i % colors.length];
 
-          return (
-            <div key={i} className={`glass-panel p-6 bg-gradient-to-br ${colorClass} shadow-xl transform hover:-translate-y-2 hover:scale-[1.02] transition-all duration-300 relative overflow-hidden group`}>
+          const Content = (
+            <div className={`glass-panel p-6 bg-gradient-to-br ${colorClass} shadow-xl transform hover:-translate-y-2 hover:scale-[1.02] transition-all duration-300 relative overflow-hidden group h-full`}>
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-white/10 transition-colors"></div>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-2">{stat.name}</p>
               <div className="flex items-end justify-between mt-2">
-                <p className="text-5xl font-black text-white tracking-tighter drop-shadow-md">{stat.value}</p>
+                <p className="text-4xl lg:text-5xl font-black text-white tracking-tighter drop-shadow-md">{stat.value}</p>
               </div>
             </div>
+          );
+
+          return stat.link ? (
+            <Link key={i} href={stat.link}>
+              {Content}
+            </Link>
+          ) : (
+            <div key={i}>{Content}</div>
           );
         })}
       </div>

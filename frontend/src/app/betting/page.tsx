@@ -152,6 +152,10 @@ export default function BettingPage() {
     }
 
     try {
+        // Show immediate feedback
+        const confirmBtn = document.activeElement as HTMLButtonElement;
+        if (confirmBtn) confirmBtn.disabled = true;
+        
         const token = sessionStorage.getItem('token');
         const data = await api.post('/bets/place', {
             draw_id: activeDraw.id,
@@ -159,30 +163,38 @@ export default function BettingPage() {
         }, token);
 
         if (data.error) {
-            alert(data.error);
+            alert(`Error: ${data.error}`);
+            if (confirmBtn) confirmBtn.disabled = false;
         } else {
             const totalAmount = cart.reduce((s, i) => s + i.amount, 0);
+            
+            // Generate ticket
+            const datePart = activeDraw.draw_date.split('T')[0];
+            const [y, mo, d] = datePart.split('-').map(Number);
+            const localDrawDate = new Date(y, mo-1, d).toLocaleDateString();
+
             const ticketData = {
                 title: 'TIEMPOS NICA Y TICA',
                 subtitle: `TICKET DE APUESTA`,
                 lines: [
                     { label: 'Sorteo', value: `${lotteryType || ''} - ${activeDraw.draw_time}` },
-                    { label: 'Fecha', value: new Date(activeDraw.draw_date).toLocaleDateString() },
-                    { label: 'Hora', value: new Date().toLocaleTimeString() },
-                    { label: 'Ref.', value: `#${data.bet_id?.slice(0, 6) || 'N/A'}` },
+                    { label: 'Fecha Sorteo', value: localDrawDate },
+                    { label: 'Fecha Compra', value: new Date().toLocaleString() },
+                    { label: 'Ref.', value: `#${data.bet_id?.slice(0, 8) || 'N/A'}` },
                     ...cart.map(i => ({ label: `Jugada #${i.number}`, value: `₡${i.amount.toLocaleString()}` })),
                     { label: 'TOTAL APOSTADO', value: `₡${totalAmount.toLocaleString()}`, bold: true },
                 ],
-                footer: `Los premios se cancelarán en un máximo de 24 horas. ¡Gracias por jugar!\n--------------------------------\n${new Date().toLocaleString()}`,
-                barcode: data.bet_id?.slice(0, 16) || ''
+                footer: `¡Gracias por jugar!\nVerifique su ticket.\n--------------------------------\n${new Date().toLocaleString()}`,
+                barcode: data.bet_id || ''
             };
             setLastBetTicket(ticketData);
-            alert('¡Su apuesta ha sido procesada con éxito! Puede imprimir su ticket abajo.');
+            alert('¡APUESTA PROCESADA EXITOSAMENTE!\nSu ticket ha sido generado.');
             fetchBalance();
             setCart([]);
+            setSelectionStep(1); // Reset to start
         }
     } catch (err) {
-        alert('Error al realizar la apuesta.');
+        alert('Error crítico al realizar la apuesta. Por favor verifique su historial.');
     }
   };
 
