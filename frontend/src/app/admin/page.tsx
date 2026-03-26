@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '../../lib/api';
+import ProtectedRoute from '../../components/ProtectedRoute';
 
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState({ todaySales: 0, todayWinnings: 0, totalUsers: 0, pendingSinpe: 0, pendingWithdrawals: 0 });
@@ -170,6 +171,7 @@ export default function AdminDashboardPage() {
   ];
 
   return (
+    <ProtectedRoute role="ADMIN">
     <div className="max-w-7xl mx-auto space-y-10 animate-in fade-in duration-700">
       {/* Emergency Close Modal */}
       {showCloseModal && (
@@ -341,10 +343,16 @@ export default function AdminDashboardPage() {
                 <p className="text-[10px] text-gray-500 uppercase">Bloqueo global inmediato</p>
               </button>
               {currentUser?.role === 'ADMIN' && (
-                <Link href="/admin/database" className="w-full text-left p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 hover:border-purple-400/50 hover:bg-purple-500/20 transition-all group block mt-4">
-                  <p className="font-bold group-hover:text-white text-purple-400 text-sm">💾 Respaldo & Restauración</p>
-                  <p className="text-[10px] text-gray-500 uppercase mt-1">Exportar e Importar Base de Datos</p>
-                </Link>
+                <>
+                  <Link href="/admin/settings" className="w-full text-left p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 hover:border-orange-400/50 hover:bg-orange-500/20 transition-all group block">
+                    <p className="font-bold group-hover:text-white text-orange-400 text-sm">⚙️ Configuración Global</p>
+                    <p className="text-[10px] text-gray-500 uppercase mt-1 text-orange-200/50">WhatsApp & SINPE para Jugadores</p>
+                  </Link>
+                  <Link href="/admin/database" className="w-full text-left p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 hover:border-purple-400/50 hover:bg-purple-500/20 transition-all group block mt-2">
+                    <p className="font-bold group-hover:text-white text-purple-400 text-sm">💾 Respaldo & Restauración</p>
+                    <p className="text-[10px] text-gray-500 uppercase mt-1">Exportar e Importar Base de Datos</p>
+                  </Link>
+                </>
               )}
            </div>
         </div>
@@ -456,5 +464,6 @@ export default function AdminDashboardPage() {
         </div>
       </div>
     </div>
+    </ProtectedRoute>
   );
 }

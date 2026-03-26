@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
 import PrintButton from '../../components/PrintButton';
+import ProtectedRoute from '../../components/ProtectedRoute';
 
 export default function MyBetsPage() {
     const [bets, setBets] = useState<any[]>([]);
@@ -73,6 +74,7 @@ export default function MyBetsPage() {
     const tickets = Object.values(groupedBets);
 
     return (
+        <ProtectedRoute>
         <main className="p-4 md:p-8 max-w-5xl mx-auto w-full space-y-10 animate-in fade-in duration-500">
             <header className="py-10 text-center bg-[#1e293b] rounded-3xl border border-white/5 shadow-2xl">
                 <h1 className="text-4xl font-extrabold tracking-tighter text-white uppercase italic">Mis Jugadas</h1>
@@ -185,5 +187,6 @@ export default function MyBetsPage() {
                 </section>
             )}
         </main>
+        </ProtectedRoute>
     );
 }

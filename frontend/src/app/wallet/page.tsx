@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
+import ProtectedRoute from '../../components/ProtectedRoute';
 
 export default function WalletPage() {
     const [balance, setBalance] = useState(0);
@@ -10,31 +11,38 @@ export default function WalletPage() {
     const [ref, setRef] = useState('');
     const [uploading, setUploading] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
+    const [systemSettings, setSystemSettings] = useState<any>({});
+    const [methods, setMethods] = useState<any[]>([]);
+    const [selectedMethod, setSelectedMethod] = useState<'SINPE' | 'CARD'>('SINPE');
+    const [showAddCard, setShowAddCard] = useState(false);
+    const [newCard, setNewCard] = useState({ number: '', expiry: '', provider: 'VISA' });
+    const [actionView, setActionView] = useState<'RECHARGE' | 'WITHDRAW'>('RECHARGE');
+    const [withdrawalMethod, setWithdrawalMethod] = useState<'SINPE' | 'IBAN'>('SINPE');
+    const [iban, setIban] = useState('');
+    const [withdrawing, setWithdrawing] = useState(false);
 
     useEffect(() => {
         setIsMounted(true);
         fetchWalletData();
     }, []);
 
-    const [methods, setMethods] = useState<any[]>([]);
-    const [selectedMethod, setSelectedMethod] = useState<'SINPE' | 'CARD'>('SINPE');
-    const [showAddCard, setShowAddCard] = useState(false);
-    const [newCard, setNewCard] = useState({ number: '', expiry: '', provider: 'VISA' });
-
     const fetchWalletData = async () => {
         try {
             const token = sessionStorage.getItem('token');
             if (!token) return;
             
-            const wallet = await api.get('/wallet/balance', token);
-            if (wallet && !wallet.error) {
-                setBalance(Number(wallet.balance) || 0);
-            }
+            const [wallet, m, settings, txs] = await Promise.all([
+                api.get('/wallet/balance', token),
+                api.get('/wallet/methods', token),
+                api.get('/admin/settings', token),
+                api.get('/wallet/history', token)
+            ]);
 
-            const m = await api.get('/wallet/methods', token);
-            if (Array.isArray(m)) {
-                setMethods(m);
-            }
+            if (wallet && !wallet.error) setBalance(Number(wallet.balance) || 0);
+            if (Array.isArray(m)) setMethods(m);
+            if (settings && !settings.error) setSystemSettings(settings);
+            if (Array.isArray(txs)) setTransactions(txs);
+
         } catch (err) {
             console.error(err);
         }
@@ -91,11 +99,6 @@ export default function WalletPage() {
         }
     };
 
-    const [actionView, setActionView] = useState<'RECHARGE' | 'WITHDRAW'>('RECHARGE');
-    const [withdrawalMethod, setWithdrawalMethod] = useState<'SINPE' | 'IBAN'>('SINPE');
-    const [iban, setIban] = useState('');
-    const [withdrawing, setWithdrawing] = useState(false);
-
     const handleWithdrawal = async (e: React.FormEvent) => {
         e.preventDefault();
         const amt = Number(amount);
@@ -135,7 +138,16 @@ export default function WalletPage() {
 
     if (!isMounted) return null;
 
+    const sinpeNumbers = systemSettings.sinpe_numbers ? JSON.parse(systemSettings.sinpe_numbers) : [];
+    const whatsappLink = (refCode: string, amt: string) => {
+        const phone = systemSettings.whatsapp_support ? JSON.parse(systemSettings.whatsapp_support) : '';
+        if (!phone) return null;
+        const msg = encodeURIComponent(`Hola, acabo de realizar un SINPE por ₡${amt}. Ref: ${refCode}. Por favor acreditar a mi cuenta.`);
+        return `https://wa.me/${phone}?text=${msg}`;
+    };
+
     return (
+        <ProtectedRoute>
         <main className="p-4 md:p-8 flex-1 max-w-4xl mx-auto w-full space-y-10 animate-in fade-in duration-500 pb-20">
             <header className="text-center py-10 bg-[#1e293b] rounded-[2rem] border border-white/5 shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 via-blue-500 to-purple-500"></div>
@@ -144,7 +156,6 @@ export default function WalletPage() {
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                {/* Left Side: Balance & Methods */}
                 <div className="lg:col-span-5 space-y-8">
                     <section className="glass-panel p-10 text-center bg-gradient-to-br from-emerald-500/10 to-blue-500/10 border-emerald-500/20 shadow-2xl">
                         <p className="text-emerald-400 text-[10px] uppercase tracking-[0.3em] mb-3 font-black">Saldo de Cuenta</p>
@@ -210,7 +221,6 @@ export default function WalletPage() {
                     </section>
                 </div>
 
-                {/* Right Side: Recharge Flow */}
                 <div className="lg:col-span-7 space-y-8">
                     <section className="glass-panel p-8 space-y-8 shadow-2xl border-white/5 relative">
                         <div className="flex bg-black/40 rounded-2xl p-2 border border-white/10 mb-6">
@@ -259,14 +269,21 @@ export default function WalletPage() {
                                 {selectedMethod === 'SINPE' ? (
                                     <div className="bg-emerald-500/5 p-6 rounded-[2rem] border border-emerald-500/10 space-y-6 animate-in fade-in slide-in-from-left-4 duration-500">
                                         <div className="space-y-4">
-                                            <div className="flex justify-between items-center text-xs">
-                                                <span className="text-gray-500 font-bold uppercase">Número SINPE Destino</span>
-                                                <span className="text-white font-black font-mono text-lg">+506 8557 1922</span>
-                                            </div>
-                                            <div className="flex justify-between items-center text-xs">
-                                                <span className="text-gray-500 font-bold uppercase">A nombre de</span>
-                                                <span className="text-white font-black">Soporte Tiempos</span>
-                                            </div>
+                                            <h3 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest text-center mb-2">Cuentas Autorizadas</h3>
+                                            {sinpeNumbers.length > 0 ? sinpeNumbers.map((s: any, idx: number) => (
+                                                <div key={idx} className="p-4 bg-black/20 rounded-2xl border border-white/5 space-y-1">
+                                                     <div className="flex justify-between items-center text-xs">
+                                                        <span className="text-gray-500 font-bold uppercase">{s.bank}</span>
+                                                        <span className="text-white font-black font-mono text-lg">{s.number}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-[10px]">
+                                                        <span className="text-gray-600 uppercase font-black">A nombre de</span>
+                                                        <span className="text-emerald-400 font-bold">{s.owner}</span>
+                                                    </div>
+                                                </div>
+                                            )) : (
+                                                <div className="p-4 text-center text-gray-500 text-xs italic">Cargando cuentas...</div>
+                                            )}
                                         </div>
                                         
                                         <form onSubmit={handleRecharge} className="space-y-6 border-t border-white/5 pt-6">
@@ -302,6 +319,17 @@ export default function WalletPage() {
                                             >
                                                 {uploading ? 'ENVIANDO...' : 'ENVIAR COMPROBANTE'}
                                             </button>
+                                            
+                                            {ref && amount && whatsappLink(ref, amount) && (
+                                                <a 
+                                                    href={whatsappLink(ref, amount) || '#'} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="block w-full py-4 bg-[#25D366] text-white text-center rounded-2xl font-black text-xs uppercase tracking-widest hover:brightness-110 transition-all"
+                                                >
+                                                    📲 Enviar Comprobante vía WhatsApp
+                                                </a>
+                                            )}
                                         </form>
                                     </div>
                                 ) : (
@@ -436,14 +464,14 @@ export default function WalletPage() {
                             <div key={i} className="flex justify-between items-center p-5 bg-white/5 rounded-2xl border border-white/5 hover:border-white/20 transition-all">
                                 <div>
                                     <div className="flex items-center gap-2">
-                                        <p className="font-black text-white text-sm uppercase">{tx.type}</p>
-                                        {tx.method && <span className="text-[8px] bg-white/10 px-2 py-0.5 rounded text-gray-400 font-bold">{tx.method}</span>}
+                                        <p className="font-black text-white text-sm uppercase">{tx.type || 'TRANSFERENCIA'}</p>
+                                        {tx.method_type && <span className="text-[8px] bg-white/10 px-2 py-0.5 rounded text-gray-400 font-bold">{tx.method_type}</span>}
                                     </div>
-                                    <p className="text-[10px] text-gray-600 font-bold">{new Date(tx.date).toLocaleString()}</p>
+                                    <p className="text-[10px] text-gray-600 font-bold">{tx.created_at ? new Date(tx.created_at).toLocaleString() : ''}</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className={`font-black text-xl ${tx.amount > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                        {tx.amount > 0 ? '+' : ''}₡{Math.abs(tx.amount).toLocaleString()}
+                                    <p className={`font-black text-xl ${Number(tx.amount) > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        {Number(tx.amount) > 0 ? '+' : ''}₡{Math.abs(Number(tx.amount)).toLocaleString()}
                                     </p>
                                     <span className={`text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest ${tx.status === 'PENDING' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-emerald-500/20 text-emerald-400'}`}>{tx.status}</span>
                                 </div>
@@ -457,5 +485,6 @@ export default function WalletPage() {
                 </div>
             </section>
         </main>
+        </ProtectedRoute>
     );
 }

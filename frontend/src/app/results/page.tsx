@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
+import ProtectedRoute from '../../components/ProtectedRoute';
 
 export default function Results() {
     const [results, setResults] = useState<any[]>([]);
@@ -32,6 +33,7 @@ export default function Results() {
     if (!isMounted) return null;
 
     return (
+        <ProtectedRoute>
         <main className="p-6 flex-1 max-w-4xl mx-auto w-full space-y-10">
             <header className="py-10 px-8 text-center bg-gradient-to-br from-[#1e293b] to-[#0f172a] rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full -mr-32 -mt-32 blur-3xl group-hover:bg-emerald-500/10 transition-colors duration-1000"></div>
@@ -91,5 +93,6 @@ export default function Results() {
                 )}
             </section>
         </main>
+        </ProtectedRoute>
     );
 }

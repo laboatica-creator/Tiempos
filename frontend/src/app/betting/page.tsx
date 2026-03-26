@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
 import PrintButton from '../../components/PrintButton';
+import ProtectedRoute from '../../components/ProtectedRoute';
 
 interface CartItem {
   number: string;
@@ -223,6 +224,7 @@ export default function BettingPage() {
   if (!isMounted) return <div className="min-h-screen bg-[#0f172a]" />;
 
   return (
+    <ProtectedRoute>
     <main className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-700">
       {/* Selection Column */}
       <section className="lg:col-span-2 space-y-6">
@@ -485,5 +487,6 @@ export default function BettingPage() {
           </div>
       )}
     </main>
+    </ProtectedRoute>
   );
 }
