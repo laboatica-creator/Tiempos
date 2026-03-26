@@ -80,11 +80,14 @@ app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/admin', adminRoutes);
 console.log('🔧 [8] Rutas cargadas');
 
-// PostgreSQL
+// PostgreSQL 🔥 CON SSL PARA RENDER
 console.log('🔧 [9] Configurando PostgreSQL...');
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgres://tiempos_user:tiempos_password@localhost:5432/tiempos_db',
   connectionTimeoutMillis: 5000,
+  ssl: {
+    rejectUnauthorized: false  // 🔥 Necesario para Render PostgreSQL
+  }
 });
 
 pool.on('error', (err) => {

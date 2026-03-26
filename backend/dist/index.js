@@ -82,11 +82,14 @@ app.use('/api/draws', draw_route_1.default);
 app.use('/api/whatsapp', whatsapp_route_1.default);
 app.use('/api/admin', admin_route_1.default);
 console.log('🔧 [8] Rutas cargadas');
-// PostgreSQL
+// PostgreSQL 🔥 CON SSL PARA RENDER
 console.log('🔧 [9] Configurando PostgreSQL...');
 exports.pool = new pg_1.Pool({
     connectionString: process.env.DATABASE_URL || 'postgres://tiempos_user:tiempos_password@localhost:5432/tiempos_db',
     connectionTimeoutMillis: 5000,
+    ssl: {
+        rejectUnauthorized: false // 🔥 Necesario para Render PostgreSQL
+    }
 });
 exports.pool.on('error', (err) => {
     console.error('Unexpected error on idle client', err);
