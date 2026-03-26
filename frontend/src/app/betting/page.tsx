@@ -101,18 +101,18 @@ export default function BettingPage() {
     setSelectionStep(3);
     const token = sessionStorage.getItem('token');
     const exposureData = await api.get(`/bets/exposure/${draw.id}`, token);
+    let numsGrid = Array.from({ length: 100 }, (_, i) => ({
+        number: i.toString().padStart(2, '0'),
+        exposure: 0
+    }));
+
     if (exposureData && exposureData.exposure) {
-        const nums = Object.entries(exposureData.exposure).map(([num, exp]) => ({
-            number: num,
-            exposure: Number(exp)
-        }));
-        setNumbers(nums);
-    } else {
-        setNumbers(Array.from({ length: 100 }, (_, i) => ({
-            number: i.toString().padStart(2, '0'),
-            exposure: 0
-        })));
+        Object.entries(exposureData.exposure).forEach(([num, exp]) => {
+            const idx = parseInt(num);
+            if (numsGrid[idx]) numsGrid[idx].exposure = Number(exp);
+        });
     }
+    setNumbers(numsGrid);
   };
 
   const updateCountdown = () => {
@@ -232,16 +232,15 @@ export default function BettingPage() {
                         <button 
                             key={t}
                             onClick={() => handleSelectLottery(t)}
-                            className="group relative h-52 flex flex-col items-center justify-center bg-gradient-to-br from-white/10 to-transparent border border-white/10 rounded-[2.5rem] hover:bg-emerald-500/10 hover:border-emerald-500/50 transition-all duration-300 transform hover:-translate-y-2 hover:scale-[1.02] active:scale-95 overflow-hidden shadow-2xl"
+                            className="group relative h-32 sm:h-52 flex flex-col items-center justify-center bg-gradient-to-br from-white/10 to-transparent border border-white/10 rounded-3xl sm:rounded-[2.5rem] hover:bg-emerald-500/10 hover:border-emerald-500/50 transition-all duration-300 transform hover:-translate-y-1 sm:hover:-translate-y-2 hover:scale-[1.02] active:scale-95 overflow-hidden shadow-2xl"
                         >
-                            {/* Animated Background Element */}
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-emerald-500/10 transition-colors"></div>
+                            <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-emerald-500/5 rounded-full blur-2xl -mr-6 -mt-6 sm:-mr-10 sm:-mt-10 group-hover:bg-emerald-500/10 transition-colors"></div>
                             
-                            <div className="absolute top-4 right-4 p-4 opacity-20 group-hover:opacity-100 transition-opacity">
-                                <span className="text-4xl">{t === 'TICA' ? '🇨🇷' : '🇳🇮'}</span>
+                            <div className="absolute top-2 right-2 sm:top-4 sm:right-4 p-2 sm:p-4 opacity-20 group-hover:opacity-100 transition-opacity">
+                                <span className="text-2xl sm:text-4xl">{t === 'TICA' ? '🇨🇷' : '🇳🇮'}</span>
                             </div>
-                            <span className="text-6xl font-black text-white tracking-[0.2em] group-hover:scale-110 transition-transform drop-shadow-2xl italic">{t}</span>
-                            <span className="text-[10px] text-gray-500 font-black uppercase mt-4 tracking-[0.3em] group-hover:text-emerald-400 transition-colors">Lotería de {t === 'TICA' ? 'Costa Rica' : 'Nicaragua'}</span>
+                            <span className="text-3xl sm:text-6xl font-black text-white tracking-[0.2em] group-hover:scale-110 transition-transform drop-shadow-2xl italic">{t}</span>
+                            <span className="text-[8px] sm:text-[10px] text-gray-500 font-black uppercase mt-2 sm:mt-4 tracking-[0.3em] group-hover:text-emerald-400 transition-colors">Lotería de {t === 'TICA' ? 'Costa Rica' : 'Nicaragua'}</span>
                         </button>
                     ))}
                 </div>
@@ -322,9 +321,9 @@ export default function BettingPage() {
                     </div>
                 </div>
 
-                <div className="glass-panel p-6">
-                    <h2 className="text-lg font-black text-gray-300 uppercase mb-6 tracking-widest">Pizarra de Números</h2>
-                    <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+                <div className="glass-panel p-4 sm:p-6">
+                    <h2 className="text-sm sm:text-lg font-black text-gray-300 uppercase mb-4 sm:mb-6 tracking-widest">Pizarra de Números</h2>
+                    <div className="grid grid-cols-5 sm:grid-cols-10 gap-1 sm:gap-2">
                         {numbers.map((item) => {
                             const isLimitReached = item.exposure >= 50000;
                             return (

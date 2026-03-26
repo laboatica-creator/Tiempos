@@ -8,6 +8,7 @@ import { Server } from 'socket.io';
 import { setupCronJobs } from './services/cron.service';
 
 dotenv.config();
+process.env.TZ = 'America/Costa_Rica';
 
 console.log('🔧 [1] Dotenv configurado');
 
