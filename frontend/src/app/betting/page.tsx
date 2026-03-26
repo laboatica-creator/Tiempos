@@ -392,15 +392,23 @@ export default function BettingPage() {
                           </button>
                       ))}
                   </div>
-                  <div className="flex gap-2">
-                      <input 
-                        type="number" 
-                        value={betAmount} 
-                        onChange={(e) => setBetAmount(Number(e.target.value))}
-                        className="flex-1 bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black text-center outline-none focus:border-emerald-500"
-                        min={200}
-                      />
-                      <button onClick={addToCart} className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-6 rounded-xl transition-all active:scale-95 shadow-lg shadow-emerald-500/20 uppercase text-xs">Añadir</button>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                      <div className="flex-1 relative">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500 font-black text-xs">₡</span>
+                          <input 
+                            type="number" 
+                            value={betAmount} 
+                            onChange={(e) => setBetAmount(Number(e.target.value))}
+                            className="w-full bg-black/40 border border-white/10 p-4 pl-8 rounded-xl text-white font-black text-center outline-none focus:border-emerald-500"
+                            min={200}
+                          />
+                      </div>
+                      <button 
+                        onClick={addToCart} 
+                        className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-600 text-white font-black px-8 py-4 rounded-xl transition-all active:scale-95 shadow-lg shadow-emerald-500/20 uppercase text-sm"
+                      >
+                        Añadir Jugada
+                      </button>
                   </div>
               </div>
           )}

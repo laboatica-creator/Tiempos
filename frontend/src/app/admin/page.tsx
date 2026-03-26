@@ -202,18 +202,18 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 p-8 bg-gradient-to-r from-emerald-600/20 via-blue-900/20 to-purple-900/20 border border-white/10 rounded-[2rem] shadow-2xl relative overflow-hidden">
+      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 p-6 sm:p-8 bg-gradient-to-r from-emerald-600/20 via-blue-900/20 to-purple-900/20 border border-white/10 rounded-2xl sm:rounded-[2rem] shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 via-blue-500 to-purple-500"></div>
-        <div className="relative z-10">
-          <h1 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-blue-300 tracking-[-0.02em] uppercase italic drop-shadow-sm">Panel Maestro</h1>
-          <p className="text-blue-200/60 font-bold uppercase tracking-[0.3em] text-[10px] mt-2">Centro de Control y Gráficos en Vivo</p>
+        <div className="relative z-10 w-full lg:w-auto">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 to-blue-300 tracking-[-0.02em] uppercase italic drop-shadow-sm">Panel Maestro</h1>
+          <p className="text-blue-200/60 font-bold uppercase tracking-[0.3em] text-[8px] sm:text-[10px] mt-2">Centro de Control y Gráficos en Vivo</p>
         </div>
-        <div className="flex gap-4 w-full md:w-auto relative z-10">
-          <Link href="/admin/results" className="flex-1 md:flex-none py-4 px-8 bg-gradient-to-r from-emerald-500 to-emerald-400 text-white font-black rounded-2xl hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] hover:scale-105 transition-all text-center uppercase text-xs tracking-widest active:scale-95">
+        <div className="flex flex-wrap gap-3 w-full lg:w-auto relative z-10">
+          <Link href="/admin/results" className="flex-1 lg:flex-none py-3 px-6 sm:py-4 sm:px-8 bg-gradient-to-r from-emerald-500 to-emerald-400 text-white font-black rounded-xl sm:rounded-2xl hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] hover:scale-105 transition-all text-center uppercase text-[10px] sm:text-xs tracking-widest active:scale-95">
             Gestionar Sorteos
           </Link>
-          <button className="flex-1 md:flex-none py-4 px-8 bg-white/5 border border-white/10 text-gray-300 font-black rounded-2xl hover:bg-white/10 hover:text-white transition-all uppercase text-xs tracking-widest active:scale-95">
-            Descargar Reporte
+          <button className="flex-1 lg:flex-none py-3 px-6 sm:py-4 sm:px-8 bg-white/5 border border-white/10 text-gray-300 font-black rounded-xl sm:rounded-2xl hover:bg-white/10 hover:text-white transition-all uppercase text-[10px] sm:text-xs tracking-widest active:scale-95">
+            Reporte
           </button>
         </div>
       </header>

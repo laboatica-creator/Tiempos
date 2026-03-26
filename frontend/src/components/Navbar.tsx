@@ -47,8 +47,9 @@ const Navbar = () => {
 
     const isAdminPath = pathname?.startsWith('/admin');
     const isAuthPath = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/reset-password';
+    const hasToken = isMounted && !!sessionStorage.getItem('token');
 
-    if (isAuthPath) return null;
+    if (isAuthPath || (!hasToken && pathname !== '/')) return null;
 
     let navItems = [];
 
