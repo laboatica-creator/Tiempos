@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.promoteToFranchise = exports.createAdmin = exports.updateAdminPermissions = exports.getAdmins = exports.deleteFranchise = exports.getAllFranchises = exports.getRiskExposure = exports.deletePlayer = exports.updatePlayer = exports.getAllPlayers = exports.getRecentTransactions = exports.getDashboardStats = void 0;
+exports.updateSystemSettings = exports.getSystemSettings = exports.promoteToFranchise = exports.createAdmin = exports.updateAdminPermissions = exports.getAdmins = exports.deleteFranchise = exports.getAllFranchises = exports.getRiskExposure = exports.deletePlayer = exports.updatePlayer = exports.getAllPlayers = exports.getRecentTransactions = exports.getDashboardStats = void 0;
 const index_1 = require("../index");
 const getDashboardStats = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b;
@@ -277,3 +277,34 @@ const promoteToFranchise = (req, res) => __awaiter(void 0, void 0, void 0, funct
     }
 });
 exports.promoteToFranchise = promoteToFranchise;
+const getSystemSettings = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const result = yield index_1.pool.query(`SELECT * FROM system_settings`);
+        const settings = {};
+        result.rows.forEach(row => {
+            settings[row.key] = row.value;
+        });
+        res.json(settings);
+    }
+    catch (error) {
+        console.error('Error fetching settings:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+exports.getSystemSettings = getSystemSettings;
+const updateSystemSettings = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    const { key, value } = req.body;
+    try {
+        if (!((_a = req.user) === null || _a === void 0 ? void 0 : _a.is_master))
+            return res.status(403).json({ error: 'Solo el administrador maestro puede cambiar configuraciones globales.' });
+        yield index_1.pool.query(`INSERT INTO system_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [key, JSON.stringify(value)]);
+        res.json({ message: `Configuración '${key}' actualizada exitosamente.` });
+    }
+    catch (error) {
+        console.error('Error updating settings:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+exports.updateSystemSettings = updateSystemSettings;

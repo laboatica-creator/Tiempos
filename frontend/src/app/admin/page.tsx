@@ -51,8 +51,10 @@ export default function AdminDashboardPage() {
 
     const timer = setInterval(() => {
         const now = new Date();
-        const drawDateStr = nextDraw.draw_date.split('T')[0];
-        const drawDate = new Date(`${drawDateStr}T${nextDraw.draw_time}`);
+        const datePart = nextDraw.draw_date.split('T')[0];
+        const [y, mo, d] = datePart.split('-').map(Number);
+        const [h, m, s] = nextDraw.draw_time.split(':').map(Number);
+        const drawDate = new Date(y, mo - 1, d, h, m, s || 0);
 
         const diff = drawDate.getTime() - now.getTime();
         if (diff <= 0) {

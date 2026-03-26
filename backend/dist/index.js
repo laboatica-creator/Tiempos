@@ -21,6 +21,7 @@ const http_1 = require("http");
 const socket_io_1 = require("socket.io");
 const cron_service_1 = require("./services/cron.service");
 dotenv_1.default.config();
+process.env.TZ = 'America/Costa_Rica';
 console.log('🔧 [1] Dotenv configurado');
 const app = (0, express_1.default)();
 // 🔥 Puerto dinámico para Render y fallback 4000 local
@@ -75,8 +76,10 @@ const bet_route_1 = __importDefault(require("./routes/bet.route"));
 const draw_route_1 = __importDefault(require("./routes/draw.route"));
 const whatsapp_route_1 = __importDefault(require("./routes/whatsapp.route"));
 const admin_route_1 = __importDefault(require("./routes/admin.route"));
+const user_route_1 = __importDefault(require("./routes/user.route"));
 app.use('/api/auth', auth_route_1.default);
 app.use('/api/wallet', wallet_route_1.default);
+app.use('/api/user', user_route_1.default);
 app.use('/api/bets', bet_route_1.default);
 app.use('/api/draws', draw_route_1.default);
 app.use('/api/whatsapp', whatsapp_route_1.default);

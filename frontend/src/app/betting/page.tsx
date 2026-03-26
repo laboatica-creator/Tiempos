@@ -84,16 +84,23 @@ export default function BettingPage() {
     setSelectionStep(2);
   };
 
-  const handleSelectDraw = async (draw: any) => {
-    const [h, m, s] = draw.draw_time.split(':').map(Number);
-    const drawFullDate = new Date(draw.draw_date);
-    drawFullDate.setHours(h, m, s || 0, 0);
+  const getDrawFullDate = (draw: any) => {
+    // draw.draw_date is likely "YYYY-MM-DD" or ISO string
+    const datePart = draw.draw_date.split('T')[0];
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hours, minutes, seconds] = draw.draw_time.split(':').map(Number);
     
+    // Create date using local time parts
+    return new Date(year, month - 1, day, hours, minutes, seconds || 0);
+  };
+
+  const handleSelectDraw = async (draw: any) => {
+    const drawFullDate = getDrawFullDate(draw);
     const now = new Date();
     const diff = drawFullDate.getTime() - now.getTime();
 
     if (diff < 20 * 60 * 1000) {
-      alert('Este sorteo ya está cerrado para nuevas apuestas.');
+      alert('Sorteo cerrado. Las ventas cierran 20 minutos antes.');
       return;
     }
 
@@ -118,10 +125,8 @@ export default function BettingPage() {
   const updateCountdown = () => {
     if (!activeDraw) return;
     const now = new Date();
-    const [hours, minutes, seconds] = activeDraw.draw_time.split(':').map(Number);
-    const drawDate = new Date(activeDraw.draw_date);
-    drawDate.setHours(hours, minutes, seconds || 0, 0);
-    const diff = drawDate.getTime() - now.getTime();
+    const drawFullDate = getDrawFullDate(activeDraw);
+    const diff = drawFullDate.getTime() - now.getTime();
 
     if (diff <= 0) {
       setCountdown('SORTEANDO...');
@@ -225,9 +230,9 @@ export default function BettingPage() {
         </header>
 
         {selectionStep === 1 && (
-            <div className="glass-panel p-10 text-center space-y-8 animate-in zoom-in duration-300">
-                <h2 className="text-3xl font-black text-white uppercase italic">Seleccione la Lotería</h2>
-                <div className="grid grid-cols-2 gap-6">
+            <div className="glass-panel p-4 sm:p-10 text-center space-y-6 sm:space-y-8 animate-in zoom-in duration-300">
+                <h2 className="text-xl sm:text-3xl font-black text-white uppercase italic">Seleccione la Lotería</h2>
+                <div className="grid grid-cols-2 gap-4 sm:gap-6">
                     {['TICA', 'NICA'].map(t => (
                         <button 
                             key={t}
@@ -248,24 +253,25 @@ export default function BettingPage() {
         )}
 
         {selectionStep === 2 && (
-            <div className="glass-panel p-10 space-y-8 animate-in slide-in-from-right duration-300">
+            <div className="glass-panel p-4 sm:p-10 space-y-6 sm:space-y-8 animate-in slide-in-from-right duration-300">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="flex items-center gap-4">
                         <button onClick={() => setSelectionStep(1)} className="p-2 bg-white/5 rounded-lg text-gray-400 hover:text-white transition-colors">← Volver</button>
-                        <h2 className="text-2xl font-black text-white uppercase italic">Sorteos de {lotteryType}</h2>
+                        <h2 className="text-lg sm:text-2xl font-black text-white uppercase italic">Sorteos de {lotteryType}</h2>
                     </div>
                 </div>
 
                 <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide">
                     {next7Days.map(date => {
-                        const d = new Date(date + 'T12:00:00'); // Use noon to avoid timezone issues
+                        const dateParts = date.split('-').map(Number);
+                        const d = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], 12, 0, 0); 
                         const isSelected = selectedDate === date;
                         const label = d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
                         return (
                             <button 
                                 key={date}
                                 onClick={() => setSelectedDate(date)}
-                                className={`px-5 py-3 rounded-xl font-bold uppercase text-[10px] whitespace-nowrap transition-all border ${
+                                className={`px-4 py-2 sm:px-5 sm:py-3 rounded-xl font-bold uppercase text-[9px] sm:text-[10px] whitespace-nowrap transition-all border ${
                                     isSelected 
                                     ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/20' 
                                     : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'
@@ -277,24 +283,24 @@ export default function BettingPage() {
                     })}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                     {availableDraws.length > 0 ? availableDraws.map(d => (
                         <button 
                             key={d.id}
                             onClick={() => handleSelectDraw(d)}
-                            className="bg-white/5 border border-white/10 p-6 rounded-2xl flex justify-between items-center group hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all active:scale-95"
+                            className="bg-white/5 border border-white/10 p-4 sm:p-6 rounded-2xl flex justify-between items-center group hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all active:scale-95"
                         >
                             <div className="flex flex-col text-left">
-                                <span className="text-xs text-gray-500 font-black uppercase mb-1">Hora del Sorteo</span>
-                                <span className="text-2xl font-black text-white">{d.draw_time}</span>
+                                <span className="text-[9px] sm:text-xs text-gray-500 font-black uppercase mb-1">Hora del Sorteo</span>
+                                <span className="text-xl sm:text-2xl font-black text-white">{d.draw_time}</span>
                             </div>
-                            <div className="h-10 w-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                            <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
                                 →
                             </div>
                         </button>
                     )) : (
-                        <div className="col-span-2 py-10 text-center text-gray-500 italic uppercase font-black text-xs tracking-widest opacity-30 border-2 border-dashed border-white/5 rounded-2xl">
-                            No hay sorteos disponibles para la fecha seleccionada.
+                        <div className="col-span-2 py-8 sm:py-10 text-center text-gray-500 italic uppercase font-black text-[9px] sm:text-xs tracking-widest opacity-30 border-2 border-dashed border-white/5 rounded-2xl">
+                            No hay sorteos disponibles.
                         </div>
                     )}
                 </div>

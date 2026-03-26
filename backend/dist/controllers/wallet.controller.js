@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.adjustWalletBalance = exports.deletePaymentMethod = exports.addPaymentMethod = exports.getPaymentMethods = exports.getPendingRecharges = exports.approveRecharge = exports.requestWithdrawal = exports.createSinpeRecharge = exports.getWalletBalance = void 0;
+exports.getWinningsHistory = exports.getDepositHistory = exports.approveWithdrawal = exports.getPendingWithdrawals = exports.adjustWalletBalance = exports.deletePaymentMethod = exports.addPaymentMethod = exports.getPaymentMethods = exports.getPendingRecharges = exports.approveRecharge = exports.requestWithdrawal = exports.createSinpeRecharge = exports.getWalletBalance = void 0;
 const index_1 = require("../index");
 const getWalletBalance = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
@@ -275,3 +275,77 @@ const adjustWalletBalance = (req, res) => __awaiter(void 0, void 0, void 0, func
     }
 });
 exports.adjustWalletBalance = adjustWalletBalance;
+const getPendingWithdrawals = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const result = yield index_1.pool.query(`SELECT wr.*, u.full_name, u.phone_number, u.email 
+             FROM withdrawal_requests wr 
+             JOIN users u ON wr.user_id = u.id 
+             WHERE wr.status = 'PENDING' ORDER BY wr.created_at DESC`);
+        res.json(result.rows);
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error fetching withdrawals' });
+    }
+});
+exports.getPendingWithdrawals = getPendingWithdrawals;
+const approveWithdrawal = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    const { withdrawalId } = req.params;
+    const { status, admin_notes } = req.body; // APPROVED or REJECTED
+    const adminId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+    const client = yield index_1.pool.connect();
+    try {
+        yield client.query('BEGIN');
+        const withdrawalRes = yield client.query(`SELECT * FROM withdrawal_requests WHERE id = $1 FOR UPDATE`, [withdrawalId]);
+        if (withdrawalRes.rows.length === 0)
+            throw new Error('Retiro no encontrado.');
+        const withdrawal = withdrawalRes.rows[0];
+        if (withdrawal.status !== 'PENDING')
+            throw new Error('Este retiro ya fue procesado.');
+        if (status === 'REJECTED') {
+            // Refund the wallet since we locked funds on request (see requestWithdrawal)
+            yield client.query(`UPDATE wallets SET balance = balance + $1 WHERE user_id = $2`, [withdrawal.amount, withdrawal.user_id]);
+        }
+        yield client.query(`UPDATE withdrawal_requests SET status = $1, processed_by = $2, admin_notes = $3, updated_at = NOW() WHERE id = $4`, [status, adminId, admin_notes, withdrawalId]);
+        yield client.query('COMMIT');
+        res.json({ message: `Retiro ${status.toLowerCase()} correctamente.` });
+    }
+    catch (e) {
+        yield client.query('ROLLBACK');
+        res.status(500).json({ error: e.message });
+    }
+    finally {
+        client.release();
+    }
+});
+exports.approveWithdrawal = approveWithdrawal;
+const getDepositHistory = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+        const result = yield index_1.pool.query(`SELECT * FROM sinpe_deposits WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`, [userId]);
+        res.json(result.rows);
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error fetching history' });
+    }
+});
+exports.getDepositHistory = getDepositHistory;
+const getWinningsHistory = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
+        const result = yield index_1.pool.query(`SELECT w.*, d.lottery_type, d.draw_date, d.draw_time 
+             FROM winnings w 
+             JOIN draws d ON w.draw_id = d.id 
+             WHERE w.user_id = $1 ORDER BY w.created_at DESC`, [userId]);
+        res.json(result.rows);
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error fetching winnings' });
+    }
+});
+exports.getWinningsHistory = getWinningsHistory;
