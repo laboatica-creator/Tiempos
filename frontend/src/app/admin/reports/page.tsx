@@ -6,7 +6,7 @@ import ProtectedRoute from '../../../components/ProtectedRoute';
 
 export default function AdminReportsPage() {
     const [reportType, setReportType] = useState('sales');
-    const [datePreset, setDatePreset] = useState('30');
+    const [datePreset, setDatePreset] = useState('month');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [data, setData] = useState<any[]>([]);
@@ -279,9 +279,41 @@ export default function AdminReportsPage() {
                             Exportar CSV
                         </button>
                     </div>
+
+                    {data.length > 0 && (
+                        <div className="mt-6 pt-6 border-t border-white/5 grid grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in duration-500">
+                            <div className="bg-black/40 rounded-xl p-4 border border-white/5">
+                                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Registros Mostrados</p>
+                                <p className="text-2xl font-black text-white">{data.length}</p>
+                            </div>
+                            {reportType === 'sales' && (
+                                <div className="bg-emerald-500/10 rounded-xl p-4 border border-emerald-500/20">
+                                    <p className="text-[10px] text-emerald-500/70 font-black uppercase tracking-widest mb-1">Volumen de Emisión</p>
+                                    <p className="text-2xl font-black text-emerald-400">₡{data.reduce((acc, curr) => acc + Number(curr.total_amount), 0).toLocaleString()}</p>
+                                </div>
+                            )}
+                            {reportType === 'sinpe-deposits' && (
+                                <div className="bg-blue-500/10 rounded-xl p-4 border border-blue-500/20">
+                                    <p className="text-[10px] text-blue-500/70 font-black uppercase tracking-widest mb-1">Total Ingresado</p>
+                                    <p className="text-2xl font-black text-blue-400">₡{data.reduce((acc, curr) => acc + Number(curr.amount), 0).toLocaleString()}</p>
+                                </div>
+                            )}
+                            {reportType === 'winners' && (
+                                <div className="bg-amber-500/10 rounded-xl p-4 border border-amber-500/20">
+                                    <p className="text-[10px] text-amber-500/70 font-black uppercase tracking-widest mb-1">Total Premiado</p>
+                                    <p className="text-2xl font-black text-amber-400">₡{data.reduce((acc, curr) => acc + Number(curr.amount), 0).toLocaleString()}</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
-                <div className="glass-panel overflow-x-auto rounded-2xl border-white/5">
+                <div className="glass-panel overflow-x-auto rounded-2xl border-white/5 relative">
+                    {loading && (
+                        <div className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center z-10 backdrop-blur-sm">
+                            <p className="text-emerald-400 font-black uppercase tracking-[0.3em] text-xs animate-pulse">Consultando Registros...</p>
+                        </div>
+                    )}
                     {renderTable()}
                     
                     {data.length > 0 && (

@@ -479,8 +479,8 @@ export const getWalletTransactions = async (req: AuthRequest, res: Response) => 
         // Fetch paginado
         const result = await pool.query(query, params);
         
-        // Fetch total items (para ui opcional)
-        // const totalRes = await pool.query(`...`);
+        console.log('Transacciones encontradas:', result.rows);
+        console.log('Depósitos SINPE encontrados:', result.rows.filter(r => r.type === 'SINPE_DEPOSIT'));
         
         res.json({
             data: result.rows,

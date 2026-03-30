@@ -25,8 +25,9 @@ export default function WalletPage() {
     const [publicMethods, setPublicMethods] = useState<any[]>([]);
     
     // Filtros de historial
-    const [filterStartDate, setFilterStartDate] = useState('');
-    const [filterEndDate, setFilterEndDate] = useState('');
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+    const [filterStartDate, setFilterStartDate] = useState(todayStr);
+    const [filterEndDate, setFilterEndDate] = useState(todayStr);
     const [filterType, setFilterType] = useState('ALL');
 
     useEffect(() => {
@@ -46,7 +47,7 @@ export default function WalletPage() {
             
             const [wallet, m, settings, txs, pm] = await Promise.all([
                 api.get('/wallet/balance', token),
-                api.get('/wallet/methods', token),
+                api.get('/payment-methods/cards', token),
                 api.get('/admin/settings', token),
                 api.get(`/wallet/transactions?${params.toString()}`, token),
                 api.get('/payment-methods', '')
@@ -104,11 +105,13 @@ export default function WalletPage() {
         e.preventDefault();
         try {
             const token = sessionStorage.getItem('token');
-            await api.post('/wallet/methods', {
-                type: 'CREDIT',
+            await api.post('/payment-methods/cards', {
+                card_type: 'CREDIT',
                 provider: newCard.provider,
                 card_number: newCard.number,
-                expiry_date: newCard.expiry
+                expiry_month: parseInt(newCard.expiry.split('/')[0] || '12'),
+                expiry_year: parseInt(newCard.expiry.split('/')[1] || '2030'),
+                holder_name: 'Titular'
             }, token);
             alert('Tarjeta registrada');
             setShowAddCard(false);
@@ -216,6 +219,17 @@ export default function WalletPage() {
                                         onChange={e => setNewCard({...newCard, number: e.target.value})}
                                     />
                                 </div>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-black text-gray-500 uppercase tracking-tighter ml-2">Vencimiento (MM/YY)</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="MM/YY"
+                                        className="w-full bg-white/5 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-blue-500"
+                                        required
+                                        value={newCard.expiry}
+                                        onChange={e => setNewCard({...newCard, expiry: e.target.value})}
+                                    />
+                                </div>
                                 <button type="submit" className="w-full py-3 bg-blue-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest">GUARDAR TARJETA</button>
                             </form>
                         ) : methods.length > 0 ? (
@@ -225,7 +239,7 @@ export default function WalletPage() {
                                         <div className="flex items-center gap-3">
                                             <div className="text-lg">💳</div>
                                             <div>
-                                                <p className="text-[10px] font-black text-white">{m.provider} •••• {m.last4}</p>
+                                                <p className="text-[10px] font-black text-white">{m.card_type || 'TARJETA'} •••• {m.card_number_masked}</p>
                                                 <p className="text-[8px] text-gray-500 font-bold uppercase">HABILITADA PARA RECARGAS</p>
                                             </div>
                                         </div>
@@ -390,7 +404,7 @@ export default function WalletPage() {
                                                 <div className="p-5 bg-white/5 rounded-2xl border border-blue-500/30 flex items-center gap-4">
                                                     <div className="text-3xl">💳</div>
                                                     <div>
-                                                        <p className="text-white font-black text-sm uppercase">{methods[0].provider} •••• {methods[0].last4}</p>
+                                                        <p className="text-white font-black text-sm uppercase">{methods[0].card_type || 'TARJETA'} •••• {methods[0].card_number_masked}</p>
                                                         <p className="text-[9px] text-gray-500 font-bold">CARGANDO A ESTA TARJETA</p>
                                                     </div>
                                                 </div>

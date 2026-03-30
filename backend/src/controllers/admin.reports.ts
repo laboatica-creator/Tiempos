@@ -20,6 +20,7 @@ const buildDateFilter = (start_date: any, end_date: any, dateField: string, para
 
 export const getSalesReport = async (req: AuthRequest, res: Response) => {
     try {
+        console.log('Reporte ventas - parámetros:', req.query);
         const { start_date, end_date, format = 'json', page = 1, limit = 50 } = req.query;
         let params: any[] = [];
         let paramCount = 0;
@@ -49,7 +50,8 @@ export const getSalesReport = async (req: AuthRequest, res: Response) => {
         }
 
         const result = await pool.query(query, params);
-        
+        console.log('Datos encontrados (Ventas):', result.rows.length);
+
         if (format === 'csv') {
             const headers = ['ID', 'Fecha', 'Monto', 'Estado', 'Usuario', 'Correo', 'Lotería', 'Fecha Sorteo', 'Hora Sorteo'];
             const csvRows = result.rows.map(r => 
@@ -70,6 +72,7 @@ export const getSalesReport = async (req: AuthRequest, res: Response) => {
 
 export const getPlayersReport = async (req: AuthRequest, res: Response) => {
     try {
+        console.log('Reporte jugadores - parámetros:', req.query);
         const { start_date, end_date, format = 'json', page = 1, limit = 50 } = req.query;
         let params: any[] = [];
         let query = `SELECT id, username, email, role, phone, created_at, wallet_balance, status FROM users WHERE 1=1`;
@@ -108,6 +111,7 @@ export const getPlayersReport = async (req: AuthRequest, res: Response) => {
 
 export const getWithdrawalsReport = async (req: AuthRequest, res: Response) => {
     try {
+        console.log('Reporte retiros - parámetros:', req.query);
         const { start_date, end_date, format = 'json', page = 1, limit = 50 } = req.query;
         let params: any[] = [];
         let query = `
@@ -144,6 +148,7 @@ export const getWithdrawalsReport = async (req: AuthRequest, res: Response) => {
 
 export const getSinpeDepositsReport = async (req: AuthRequest, res: Response) => {
     try {
+        console.log('Reporte SINPE - parámetros:', req.query);
         const { start_date, end_date, format = 'json', page = 1, limit = 50 } = req.query;
         let params: any[] = [];
         let query = `
@@ -180,6 +185,7 @@ export const getSinpeDepositsReport = async (req: AuthRequest, res: Response) =>
 
 export const getWinnersReport = async (req: AuthRequest, res: Response) => {
     try {
+        console.log('Reporte Ganadores - parámetros:', req.query);
         const { start_date, end_date, format = 'json', page = 1, limit = 50 } = req.query;
         let params: any[] = [];
         let query = `

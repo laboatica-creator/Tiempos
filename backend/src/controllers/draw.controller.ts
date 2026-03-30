@@ -125,18 +125,19 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
 
 export const getDraws = async (req: Request, res: Response) => {
     try {
-        const result = await pool.query(
-            `SELECT d.*, COALESCE(SUM(b.total_amount), 0) as total_sold
-             FROM draws d
-             LEFT JOIN bets b ON d.id = b.draw_id AND b.status != 'CANCELLED'
-             WHERE d.draw_date >= CURRENT_DATE - INTERVAL '30 days'
-             GROUP BY d.id
-             ORDER BY 
-                 d.draw_date ASC,
-                 d.draw_time ASC,
-                 CASE WHEN d.status = 'OPEN' THEN 0 WHEN d.status = 'CLOSED' THEN 1 ELSE 2 END ASC
-             LIMIT 500`
-        );
+        // Asegurar que los sorteos de hoy se muestren correctamente
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+        
+        const result = await pool.query(`
+            SELECT d.*, COALESCE(SUM(b.total_amount), 0) as total_sold
+            FROM draws d
+            LEFT JOIN bets b ON d.id = b.draw_id AND b.status != 'CANCELLED'
+            WHERE d.draw_date >= $1 
+              AND (d.draw_date > $1 OR d.draw_time >= CURRENT_TIME)
+            GROUP BY d.id
+            ORDER BY d.draw_date ASC, d.draw_time ASC
+        `, [today]);
+        
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching draws:', error);

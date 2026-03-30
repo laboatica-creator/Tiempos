@@ -68,6 +68,7 @@ export default function BettingPage() {
     try {
         const token = sessionStorage.getItem('token');
         const draws = await api.get('/draws', token);
+        console.log('Sorteos recibidos del backend:', draws);
         if (Array.isArray(draws)) {
           const filtered = draws.filter((d: any) => {
             const datePart = d.draw_date.split('T')[0];
