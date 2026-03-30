@@ -6,7 +6,9 @@ import ProtectedRoute from '../../components/ProtectedRoute';
 
 export default function Results() {
     const [results, setResults] = useState<any[]>([]);
-    const [filterDate, setFilterDate] = useState(new Date().toLocaleDateString('en-CA'));
+    const [filterDate, setFilterDate] = useState(
+        new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Costa_Rica' }).format(new Date())
+    );
     const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
@@ -26,7 +28,7 @@ export default function Results() {
 
     // Filtered results based on date
     const filteredResults = results.filter(r => {
-        const rDate = new Date(r.draw_date).toLocaleDateString('en-CA');
+        const rDate = r.draw_date.split('T')[0];
         return rDate === filterDate;
     });
 

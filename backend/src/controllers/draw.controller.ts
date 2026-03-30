@@ -129,6 +129,7 @@ export const getDraws = async (req: Request, res: Response) => {
             `SELECT d.*, COALESCE(SUM(b.total_amount), 0) as total_sold
              FROM draws d
              LEFT JOIN bets b ON d.id = b.draw_id AND b.status != 'CANCELLED'
+             WHERE d.draw_date >= CURRENT_DATE - INTERVAL '30 days'
              GROUP BY d.id
              ORDER BY 
                  d.draw_date ASC,

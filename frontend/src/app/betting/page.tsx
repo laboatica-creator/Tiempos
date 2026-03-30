@@ -17,7 +17,9 @@ export default function BettingPage() {
   const [betAmount, setBetAmount] = useState<number>(1000);
   const [countdown, setCountdown] = useState('--:--:--');
   const [lotteryType, setLotteryType] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toLocaleDateString('en-CA'));
+  const [selectedDate, setSelectedDate] = useState<string>(
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Costa_Rica' }).format(new Date())
+  );
   const [availableDraws, setAvailableDraws] = useState<any[]>([]);
   const [activeDraw, setActiveDraw] = useState<any>(null);
   const [numbers, setNumbers] = useState<{number: string, exposure: number}[]>([]);
@@ -28,8 +30,7 @@ export default function BettingPage() {
   const next7Days = Array.from({length: 8}, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() + i);
-    // Use local date string in YYYY-MM-DD format
-    return d.toLocaleDateString('en-CA'); 
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Costa_Rica' }).format(d);
   });
 
   useEffect(() => {
@@ -68,11 +69,10 @@ export default function BettingPage() {
         const token = sessionStorage.getItem('token');
         const draws = await api.get('/draws', token);
         if (Array.isArray(draws)) {
-          const filtered = draws.filter((d: any) => 
-            d.lottery_type === lotteryType && 
-            d.status === 'OPEN' && 
-            new Date(d.draw_date).toISOString().split('T')[0] === selectedDate
-          );
+          const filtered = draws.filter((d: any) => {
+            const datePart = d.draw_date.split('T')[0];
+            return d.lottery_type === lotteryType && d.status === 'OPEN' && datePart === selectedDate;
+          });
           setAvailableDraws(filtered);
         }
     } catch (e) {

@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { pool } from '../index';
+import { getCRDateString, getCRTimeString } from '../utils/date';
 
 // Schedules for draws
 // TICA: 13:00, 16:00, 19:30
@@ -14,10 +15,8 @@ const initializeDailyDraws = async () => {
         await client.query('BEGIN');
 
         for (let i = 0; i <= 7; i++) {
-            const date = new Date();
-            date.setDate(date.getDate() + i);
-            const dateStr = date.toLocaleDateString('en-CA');
-            const dayOfWeek = date.getDay(); // 0 is Sunday, 6 is Saturday
+            const date = new Date(Date.now() + i * 24 * 60 * 60 * 1000);
+            const dateStr = getCRDateString(date);
 
             const ticaTimes = ['13:00:00', '16:00:00', '19:30:00'];
             const nicaTimes = ['15:00:00', '18:00:00', '21:00:00'];
@@ -63,8 +62,8 @@ const closeBetsBeforeDraw = async () => {
         
         // Pass current local date/time from common node context to avoid DB timezone issues.
         const now = new Date();
-        const dateStr = now.toLocaleDateString('en-CA'); // YYYY-MM-DD format
-        const timeStr = now.toTimeString().split(' ')[0]; // HH:mm:ss
+        const dateStr = getCRDateString(now);
+        const timeStr = getCRTimeString(now);
 
         // Find draws that are 'OPEN' and their draw_time is < 20 minutes from now.
         const res = await client.query(`
