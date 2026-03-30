@@ -19,7 +19,7 @@ const initializeDailyDraws = async () => {
             const dateStr = getCRDateString(date);
 
             const ticaTimes = ['13:00:00', '16:00:00', '19:30:00'];
-            const nicaTimes = ['12:00:00', '15:00:00', '21:00:00'];
+            const nicaTimes = ['12:00:00', '15:00:00', '18:00:00', '21:00:00'];
 
             for (const time of ticaTimes) {
                 await client.query(

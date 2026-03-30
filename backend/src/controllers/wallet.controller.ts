@@ -426,6 +426,72 @@ export const getWalletHistory = async (req: AuthRequest, res: Response) => {
     }
 };
 
+export const getWalletTransactions = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const { start_date, end_date, type, page = 1, limit = 50 } = req.query;
+
+        let query = `
+            SELECT * FROM (
+                (SELECT id, amount, 'SINPE_DEPOSIT' as type, status, created_at, method_type, reference_number as details
+                 FROM sinpe_deposits WHERE user_id = $1)
+                UNION ALL
+                (SELECT wt.id, amount, type::text, 'COMPLETED' as status, created_at, 'WALLET' as method_type, description as details
+                 FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id = w.id WHERE w.user_id = $1)
+            ) as all_txs
+            WHERE 1=1
+        `;
+        let params: any[] = [userId];
+        let paramCount = 1;
+
+        if (start_date) {
+            paramCount++;
+            query += ` AND DATE(created_at) >= $${paramCount}`;
+            params.push(start_date);
+        } else {
+            // Default 30 days
+            query += ` AND created_at >= NOW() - INTERVAL '30 days'`;
+        }
+
+        if (end_date) {
+            paramCount++;
+            query += ` AND DATE(created_at) <= $${paramCount}`;
+            params.push(end_date);
+        }
+
+        if (type && type !== 'ALL') {
+            paramCount++;
+            query += ` AND type = $${paramCount}`;
+            params.push(type);
+        }
+
+        query += ` ORDER BY created_at DESC`;
+
+        // Paginacion
+        const offset = (Number(page) - 1) * Number(limit);
+        paramCount++;
+        query += ` LIMIT $${paramCount}`;
+        params.push(Number(limit));
+        paramCount++;
+        query += ` OFFSET $${paramCount}`;
+        params.push(offset);
+
+        // Fetch paginado
+        const result = await pool.query(query, params);
+        
+        // Fetch total items (para ui opcional)
+        // const totalRes = await pool.query(`...`);
+        
+        res.json({
+            data: result.rows,
+            pagination: { page: Number(page), limit: Number(limit) }
+        });
+    } catch (error) {
+        console.error('Error fetching wallet transactions:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 export const getDepositHistory = async (req: AuthRequest, res: Response) => {
     // Legacy support or specific use
     getWalletHistory(req, res);

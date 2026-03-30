@@ -10,7 +10,8 @@ import {
     addPaymentMethod,
     deletePaymentMethod,
     requestWithdrawal,
-    getWalletHistory
+    getWalletHistory,
+    getWalletTransactions
 } from '../controllers/wallet.controller';
 import { authenticateJWT, requireRole, requirePermission } from '../middlewares/auth.middleware';
 
@@ -21,6 +22,7 @@ router.get('/balance', authenticateJWT, getWalletBalance);
 router.post('/recharge', authenticateJWT, createSinpeRecharge);
 router.post('/withdraw', authenticateJWT, requestWithdrawal);
 router.get('/history', authenticateJWT, getWalletHistory);
+router.get('/transactions', authenticateJWT, getWalletTransactions);
 
 // Payment Methods
 router.get('/methods', authenticateJWT, getPaymentMethods);

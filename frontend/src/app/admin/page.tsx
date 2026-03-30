@@ -4,11 +4,13 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '../../lib/api';
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import ProtectedRoute from '../../components/ProtectedRoute';
 
 export default function AdminDashboardPage() {
-  const [stats, setStats] = useState({ todaySales: 0, todayWinnings: 0, totalUsers: 0, pendingSinpe: 0, pendingWithdrawals: 0 });
+  const [stats, setStats] = useState({ todaySales: 0, todayWinnings: 0, totalUsers: 0, pendingSinpe: 0, pendingWithdrawals: 0, sinpeTotal: 0 });
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [chartData, setChartData] = useState<any[]>([]);
   const [ticaExposure, setTicaExposure] = useState<Record<string, number>>({});
   const [nicaExposure, setNicaExposure] = useState<Record<string, number>>({});
   const [openDraws, setOpenDraws] = useState<any[]>([]);
@@ -82,12 +84,20 @@ export default function AdminDashboardPage() {
     try {
       const token = sessionStorage.getItem('token');
       const [statsData, drawsData] = await Promise.all([
-        api.get('/admin/stats', token),
+        api.get('/admin/reports/dashboard', token),
         api.get('/draws', token)
       ]);
 
       if (statsData && !statsData.error) {
-        setStats(statsData);
+        setStats({
+          todaySales: statsData.total_sales,
+          todayWinnings: 0,
+          totalUsers: statsData.total_players,
+          pendingSinpe: statsData.sinpe_deposits_count,
+          pendingWithdrawals: statsData.pending_withdrawals,
+          sinpeTotal: statsData.sinpe_deposits_total
+        });
+        setChartData(statsData.chart_data || []);
       }
       
       fetchTransactions();
@@ -163,9 +173,9 @@ export default function AdminDashboardPage() {
   if (!isMounted) return null;
 
   const displayStats = [
-    { name: 'Ventas (Hoy)', value: `₡${Number(stats?.todaySales || 0).toLocaleString()}`, color: 'text-emerald-400', link: null },
-    { name: 'Usuarios Totales', value: (stats?.totalUsers ?? 0).toString(), color: 'text-blue-400', link: '/admin/players' },
-    { name: 'Premios (Hoy)', value: `₡${Number(stats?.todayWinnings || 0).toLocaleString()}`, color: 'text-red-400', link: null },
+    { name: 'Ventas Totales', value: `₡${Number(stats?.todaySales || 0).toLocaleString()}`, color: 'text-emerald-400', link: null },
+    { name: 'Jugadores Registrados', value: (stats?.totalUsers ?? 0).toString(), color: 'text-blue-400', link: '/admin/players' },
+    { name: 'Depósitos SINPE (Monto)', value: `₡${Number(stats?.sinpeTotal || 0).toLocaleString()}`, color: 'text-purple-400', link: '/admin/recharges' },
     { name: 'SINPE Pendientes', value: (stats?.pendingSinpe ?? 0).toString(), color: 'text-purple-400', link: '/admin/recharges' },
     { name: 'Retiros Pendientes', value: (stats?.pendingWithdrawals ?? 0).toString(), color: 'text-amber-400', link: '/admin/withdrawals' },
   ];
@@ -304,6 +314,35 @@ export default function AdminDashboardPage() {
 
         {/* Action Center & Next Draw */}
         <div className="glass-panel p-8 space-y-8">
+           <div className="pb-6 border-b border-white/5">
+              <h2 className="text-xl font-bold text-white mb-4 uppercase tracking-tighter italic">Ventas Diarias (Últimos 30 días)</h2>
+              <div className="h-48 w-full mt-4 bg-black/20 p-4 rounded-xl">
+                 {chartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData}>
+                            <XAxis 
+                                dataKey="date" 
+                                tickFormatter={(val) => {
+                                    const dt = new Date(val);
+                                    return `${dt.getDate()}/${dt.getMonth()+1}`;
+                                }}
+                                stroke="#4B5563"
+                                fontSize={10}
+                            />
+                            <Tooltip 
+                                cursor={{fill: 'rgba(255,255,255,0.05)'}} 
+                                contentStyle={{backgroundColor: '#0F172A', borderColor: '#334155'}}
+                                formatter={(val: number) => [`₡${val.toLocaleString()}`, 'Ventas']}
+                            />
+                            <Bar dataKey="total" fill="#10B981" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                 ) : (
+                     <p className="text-center text-gray-600 text-[10px] mt-16 font-bold uppercase tracking-widest">Sin datos suficientes</p>
+                 )}
+              </div>
+           </div>
+
            <div className="pb-6 border-b border-white/5">
               <h2 className="text-xl font-bold text-white mb-4 uppercase tracking-tighter italic">Próximo Sorteo</h2>
               {nextDraw ? (

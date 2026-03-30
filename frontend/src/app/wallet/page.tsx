@@ -23,6 +23,11 @@ export default function WalletPage() {
     const [withdrawing, setWithdrawing] = useState(false);
     const [selectedBank, setSelectedBank] = useState('');
     const [publicMethods, setPublicMethods] = useState<any[]>([]);
+    
+    // Filtros de historial
+    const [filterStartDate, setFilterStartDate] = useState('');
+    const [filterEndDate, setFilterEndDate] = useState('');
+    const [filterType, setFilterType] = useState('ALL');
 
     useEffect(() => {
         setIsMounted(true);
@@ -34,11 +39,16 @@ export default function WalletPage() {
             const token = sessionStorage.getItem('token');
             if (!token) return;
             
+            const params = new URLSearchParams();
+            if (filterStartDate) params.append('start_date', filterStartDate);
+            if (filterEndDate) params.append('end_date', filterEndDate);
+            if (filterType !== 'ALL') params.append('type', filterType);
+            
             const [wallet, m, settings, txs, pm] = await Promise.all([
                 api.get('/wallet/balance', token),
                 api.get('/wallet/methods', token),
                 api.get('/admin/settings', token),
-                api.get('/wallet/history', token),
+                api.get(`/wallet/transactions?${params.toString()}`, token),
                 api.get('/payment-methods', '')
             ]);
 
@@ -46,8 +56,8 @@ export default function WalletPage() {
             if (Array.isArray(m)) setMethods(m);
             if (settings && !settings.error) setSystemSettings(settings);
             if (Array.isArray(pm)) setPublicMethods(pm);
-            if (Array.isArray(txs)) {
-                setTransactions(txs);
+            if (txs && Array.isArray(txs.data)) {
+                setTransactions(txs.data);
                 setLoadingSettings(false);
             }
 
@@ -495,10 +505,46 @@ export default function WalletPage() {
             </div>
 
             <section className="glass-panel p-8 bg-black/20">
-                <h3 className="text-sm font-black text-white uppercase italic mb-6 tracking-widest flex items-center gap-3">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Historial de Transacciones
-                </h3>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <h3 className="text-sm font-black text-white uppercase italic tracking-widest flex items-center gap-3">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Historial de Transacciones
+                    </h3>
+                    <button 
+                        onClick={() => {
+                            setFilterStartDate(''); setFilterEndDate(''); setFilterType('ALL'); fetchWalletData();
+                        }}
+                        className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest"
+                    >Limpiar Filtros</button>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl mb-6">
+                    <div className="space-y-1">
+                        <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-1">Desde</label>
+                        <input type="date" value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-emerald-500/50" />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-1">Hasta</label>
+                        <input type="date" value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-emerald-500/50" />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest ml-1">Tipo</label>
+                        <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-emerald-500/50 appearance-none">
+                            <option value="ALL">TODOS</option>
+                            <option value="SINPE_DEPOSIT">RECARGAS SINPE</option>
+                            <option value="BET">APUESTAS</option>
+                            <option value="WIN">PREMIOS</option>
+                            <option value="WITHDRAWAL">RETIROS</option>
+                            <option value="ADJUSTMENT">AJUSTES</option>
+                        </select>
+                    </div>
+                    <div className="flex items-end">
+                        <button onClick={fetchWalletData} className="w-full py-2 bg-emerald-500/20 text-emerald-400 font-black rounded-xl border border-emerald-500/30 hover:bg-emerald-500 hover:text-white transition-all uppercase text-[10px] tracking-widest">
+                            Aplicar
+                        </button>
+                    </div>
+                </div>
+
                 <div className="space-y-3">
                     {transactions.length > 0 ? (
                         transactions.map((tx, i) => (

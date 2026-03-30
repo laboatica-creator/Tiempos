@@ -73,6 +73,7 @@ import betRoutes from './routes/bet.route';
 import drawRoutes from './routes/draw.route';
 import whatsappRoutes from './routes/whatsapp.route';
 import adminRoutes from './routes/admin.route';
+import adminReportsRoutes from './routes/admin.reports.route';
 import userRoutes from './routes/user.route';
 
 app.get('/api/payment-methods', async (req: Request, res: Response) => {
@@ -100,6 +101,7 @@ app.use('/api/user', userRoutes);
 app.use('/api/bets', betRoutes);
 app.use('/api/draws', drawRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/admin/reports', adminReportsRoutes);
 app.use('/api/admin', adminRoutes);
 console.log('🔧 [8] Rutas cargadas');
 
