@@ -7,53 +7,48 @@ import { getCRDateString, getCRTimeString } from '../utils/date';
 // NICA: 12:00, 15:00, 21:00
 // NICA Weekend: 18:00
 
-const initializeDailyDraws = async () => {
-    console.log('Generating automated draws for the next 7 days...');
-    const client = await pool.connect();
-    
-    try {
-        await client.query('BEGIN');
+const TICA_DRAW_TIMES = ['13:00:00', '16:00:00', '19:30:00'];
+const NICA_DRAW_TIMES = ['12:00:00', '15:00:00', '18:00:00', '21:00:00'];
 
-        for (let i = 0; i <= 7; i++) {
-            const date = new Date(Date.now() + i * 24 * 60 * 60 * 1000);
-            const dateStr = getCRDateString(date);
-
-            const ticaTimes = ['13:00:00', '16:00:00', '19:30:00'];
-            const nicaTimes = ['12:00:00', '15:00:00', '18:00:00', '21:00:00'];
-
-            for (const time of ticaTimes) {
-                await client.query(
-                    `INSERT INTO draws (lottery_type, draw_date, draw_time, status)
-                     SELECT 'TICA', $1, $2, 'OPEN'
-                     WHERE NOT EXISTS (
-                         SELECT 1 FROM draws WHERE lottery_type = 'TICA' AND draw_date = $1 AND draw_time = $2
-                     )`,
-                    [dateStr, time]
-                );
-            }
-
-            for (const time of nicaTimes) {
-                await client.query(
-                    `INSERT INTO draws (lottery_type, draw_date, draw_time, status)
-                     SELECT 'NICA', $1, $2, 'OPEN'
-                     WHERE NOT EXISTS (
-                         SELECT 1 FROM draws WHERE lottery_type = 'NICA' AND draw_date = $1 AND draw_time = $2
-                     )`,
-                    [dateStr, time]
-                );
-            }
-        }
-
-        await client.query('COMMIT');
-        console.log('Future draws (7 days) initialized successfully.');
-    } catch (error) {
-        await client.query('ROLLBACK');
-        console.error('Error generating daily draws:', error);
-    } finally {
-        client.release();
-    }
+const createDrawIfNotExists = async (type: string, date: string, time: string) => {
+    await pool.query(
+        `INSERT INTO draws (lottery_type, draw_date, draw_time, status)
+         SELECT $1, $2, $3, 'OPEN'
+         WHERE NOT EXISTS (
+             SELECT 1 FROM draws WHERE lottery_type = $1 AND draw_date = $2 AND draw_time = $3
+         )`,
+        [type, date, time]
+    );
 };
 
+export const generateDrawsForNextDays = async (days: number = 7) => {
+  console.log('[CRON] Iniciando generación de sorteos...');
+  const timeZone = 'America/Costa_Rica';
+  const today = new Date().toLocaleDateString('en-CA', { timeZone });
+  let lastDrawDate = today;
+
+  try {
+    for (let i = 0; i < days; i++) {
+      const drawDate = new Date(today);
+      drawDate.setDate(drawDate.getDate() + i);
+      const formattedDate = drawDate.toLocaleDateString('en-CA', { timeZone });
+      lastDrawDate = formattedDate;
+
+      // Generar sorteos de TICA
+      for (const time of TICA_DRAW_TIMES) {
+        await createDrawIfNotExists('TICA', formattedDate, time);
+      }
+
+      // Generar sorteos de NICA
+      for (const time of NICA_DRAW_TIMES) {
+        await createDrawIfNotExists('NICA', formattedDate, time);
+      }
+    }
+    console.log('[CRON] Sorteos generados hasta:', new Date(lastDrawDate).toLocaleDateString('es-CR', { timeZone }));
+  } catch (error) {
+    console.error('[CRON] Error generando sorteos:', error);
+  }
+};
 const closeBetsBeforeDraw = async () => {
     // Closes bets 20 minutes before draw time.
     // This is run every minute.
@@ -87,10 +82,10 @@ const closeBetsBeforeDraw = async () => {
 
 export const setupCronJobs = () => {
     // Run daily at 00:05 to create the day's draws
-    cron.schedule('5 0 * * *', initializeDailyDraws);
+    cron.schedule('5 0 * * *', () => generateDrawsForNextDays(7));
 
     // Initial setup if restarted mid-day
-    initializeDailyDraws();
+    generateDrawsForNextDays(7);
 
     // Run every minute to auto-close draws 20 minutes before
     cron.schedule('* * * * *', closeBetsBeforeDraw);

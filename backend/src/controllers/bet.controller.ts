@@ -166,18 +166,31 @@ export const getNumberExposure = async (req: Request, res: Response) => {
 
 export const getUserBets = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
+    const { date } = req.query;
     try {
-        const result = await pool.query(
-            `SELECT b.id as bet_id, b.total_amount, b.status as bet_status, b.created_at,
-                    b.draw_id, d.lottery_type, d.draw_date, d.draw_time, d.status as draw_status,
-                    bi.number, bi.amount, bi.status as item_status
-             FROM bets b
-             JOIN draws d ON b.draw_id = d.id
-             JOIN bet_items bi ON bi.bet_id = b.id
-             WHERE b.user_id = $1
-             ORDER BY d.draw_date ASC, d.draw_time ASC`,
-            [userId]
-        );
+        let query = `
+            SELECT b.id, b.total_amount, b.status, b.created_at,
+                   d.lottery_type, d.draw_date, d.draw_time,
+                   COALESCE(
+                     json_agg(
+                       json_build_object('number', bi.number, 'amount', bi.amount, 'status', bi.status)
+                     ) FILTER (WHERE bi.id IS NOT NULL), '[]'
+                   ) as items
+            FROM bets b
+            JOIN draws d ON b.draw_id = d.id
+            LEFT JOIN bet_items bi ON bi.bet_id = b.id
+            WHERE b.user_id = $1
+        `;
+        const params: any[] = [userId];
+
+        if (date) {
+            query += ` AND DATE(b.created_at) = $2`;
+            params.push(date);
+        }
+
+        query += ` GROUP BY b.id, d.lottery_type, d.draw_date, d.draw_time ORDER BY b.created_at DESC`;
+
+        const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching user bets:', error);

@@ -124,25 +124,32 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
 };
 
 export const getDraws = async (req: Request, res: Response) => {
-    try {
-        // Asegurar que los sorteos de hoy se muestren correctamente
-        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
-        
-        const result = await pool.query(`
-            SELECT d.*, COALESCE(SUM(b.total_amount), 0) as total_sold
-            FROM draws d
-            LEFT JOIN bets b ON d.id = b.draw_id AND b.status != 'CANCELLED'
-            WHERE d.draw_date >= $1 
-              AND (d.draw_date > $1 OR d.draw_time >= CURRENT_TIME)
-            GROUP BY d.id
-            ORDER BY d.draw_date ASC, d.draw_time ASC
-        `, [today]);
-        
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching draws:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
+  try {
+    const timeZone = 'America/Costa_Rica';
+    const today = new Date().toLocaleDateString('en-CA', { timeZone });
+    const currentTime = new Date().toLocaleTimeString('en-CA', { timeZone, hour12: false });
+    
+    console.log('[DRAWS] Fecha actual:', today, 'Hora actual:', currentTime);
+    
+    // Consulta SQL que incluye TODOS los sorteos futuros y los de hoy que aún no han pasado
+    const draws = await pool.query(`
+      SELECT d.*, COALESCE(SUM(b.total_amount), 0) as total_sold
+      FROM draws d
+      LEFT JOIN bets b ON d.id = b.draw_id AND b.status != 'CANCELLED'
+      WHERE d.draw_date > $1 
+         OR (d.draw_date = $1 AND d.draw_time >= $2)
+      GROUP BY d.id
+      ORDER BY d.draw_date ASC, d.draw_time ASC
+    `, [today, currentTime]);
+    
+    console.log('[DRAWS] Sorteos encontrados:', draws.rows.length);
+    console.log('[DRAWS] Detalle:', draws.rows.map(d => `${d.lottery_type} ${d.draw_date} ${d.draw_time}`));
+    
+    res.json(draws.rows);
+  } catch (error) {
+    console.error('[DRAWS] Error:', error);
+    res.status(500).json({ error: 'Error al obtener sorteos' });
+  }
 };
 
 export const cancelDraw = async (req: AuthRequest, res: Response) => {

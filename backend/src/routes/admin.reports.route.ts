@@ -11,13 +11,14 @@ import {
 
 const router = Router();
 
-router.use(authenticateJWT, requireRole(['ADMIN']));
+// Todas las rutas requieren autenticación y rol ADMIN o FRANCHISE
+router.use(authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']));
 
 router.get('/sales', getSalesReport);
 router.get('/players', getPlayersReport);
+router.get('/sinpe', getSinpeDepositsReport);
 router.get('/withdrawals', getWithdrawalsReport);
-router.get('/sinpe-deposits', getSinpeDepositsReport);
-router.get('/winners', getWinnersReport);
+router.get('/winnings', getWinnersReport);
 router.get('/dashboard', getDashboardReport);
 
 export default router;
