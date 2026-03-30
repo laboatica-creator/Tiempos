@@ -22,6 +22,7 @@ export default function WalletPage() {
     const [iban, setIban] = useState('');
     const [withdrawing, setWithdrawing] = useState(false);
     const [selectedBank, setSelectedBank] = useState('');
+    const [publicMethods, setPublicMethods] = useState<any[]>([]);
 
     useEffect(() => {
         setIsMounted(true);
@@ -33,16 +34,18 @@ export default function WalletPage() {
             const token = sessionStorage.getItem('token');
             if (!token) return;
             
-            const [wallet, m, settings, txs] = await Promise.all([
+            const [wallet, m, settings, txs, pm] = await Promise.all([
                 api.get('/wallet/balance', token),
                 api.get('/wallet/methods', token),
                 api.get('/admin/settings', token),
-                api.get('/wallet/history', token)
+                api.get('/wallet/history', token),
+                api.get('/payment-methods', '')
             ]);
 
             if (wallet && !wallet.error) setBalance(Number(wallet.balance) || 0);
             if (Array.isArray(m)) setMethods(m);
             if (settings && !settings.error) setSystemSettings(settings);
+            if (Array.isArray(pm)) setPublicMethods(pm);
             if (Array.isArray(txs)) {
                 setTransactions(txs);
                 setLoadingSettings(false);
@@ -145,27 +148,11 @@ export default function WalletPage() {
 
     if (!isMounted) return null;
 
-    const sinpeNumbers = Array.isArray(systemSettings.sinpe_numbers) 
-        ? systemSettings.sinpe_numbers 
-        : systemSettings.sinpe_numbers 
-            ? JSON.parse(systemSettings.sinpe_numbers) 
-            : [];
+    const adminPhone = process.env.NEXT_PUBLIC_ADMIN_WHATSAPP_NUMBER || '50688888888';
 
     const whatsappLink = (refCode: string, amt: string) => {
-        let phone = '';
-        if (systemSettings.whatsapp_support) {
-            try {
-                const raw = typeof systemSettings.whatsapp_support === 'string' 
-                    ? JSON.parse(systemSettings.whatsapp_support) 
-                    : systemSettings.whatsapp_support;
-                phone = String(raw).replace(/\D/g, '');
-            } catch (e) {
-                phone = String(systemSettings.whatsapp_support).replace(/\D/g, '');
-            }
-        }
-        if (!phone) return null;
         const msg = encodeURIComponent(`Hola, acabo de realizar un SINPE por ₡${amt}. Ref: ${refCode}. Por favor acreditar a mi cuenta.`);
-        return `https://wa.me/${phone}?text=${msg}`;
+        return `https://wa.me/${adminPhone}?text=${msg}`;
     };
 
     return (
@@ -291,16 +278,20 @@ export default function WalletPage() {
                                 {selectedMethod === 'SINPE' ? (
                                     <div className="bg-emerald-500/5 p-6 rounded-[2rem] border border-emerald-500/10 space-y-6 animate-in fade-in slide-in-from-left-4 duration-500">
                                         <div className="space-y-4">
-                                            <h3 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest text-center mb-2">Cuentas Autorizadas</h3>
-                                            {sinpeNumbers.length > 0 ? sinpeNumbers.map((s: any, idx: number) => (
+                                            <h3 className="text-[10px] font-black text-emerald-500 uppercase tracking-widest text-center mb-2">¿Cómo recargar por SINPE?</h3>
+                                            {publicMethods.length > 0 ? publicMethods.map((s: any, idx: number) => (
                                                 <div key={idx} className="p-4 bg-black/20 rounded-2xl border border-white/5 space-y-1">
                                                      <div className="flex justify-between items-center text-xs">
-                                                        <span className="text-gray-500 font-bold uppercase">{s.bank}</span>
-                                                        <span className="text-white font-black font-mono text-lg">{s.number}</span>
+                                                        <span className="text-gray-500 font-bold uppercase">{s.name}</span>
+                                                        <span className="text-emerald-400 font-black font-mono text-lg">{s.sinpePhone}</span>
                                                     </div>
                                                     <div className="flex justify-between items-center text-[10px]">
-                                                        <span className="text-gray-600 uppercase font-black">A nombre de</span>
-                                                        <span className="text-emerald-400 font-bold">{s.owner}</span>
+                                                        <span className="text-gray-600 uppercase font-black">Cuenta IBAN</span>
+                                                        <span className="text-white font-bold">{s.account !== 'N/A' ? s.account : 'No Requerido'}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-[10px]">
+                                                        <span className="text-gray-600 uppercase font-black">Tipo</span>
+                                                        <span className="text-emerald-400 font-bold px-2 bg-emerald-500/10 rounded-full">{s.type}</span>
                                                     </div>
                                                 </div>
                                             )) : loadingSettings ? (
@@ -311,18 +302,16 @@ export default function WalletPage() {
                                         </div>
 
                                         {/* Dynamic Support WhatsApp Button */}
-                                        {systemSettings.whatsapp_support && (
-                                            <div className="pt-4 border-t border-white/5">
-                                                <a 
-                                                    href={`https://wa.me/${JSON.parse(systemSettings.whatsapp_support).replace(/\D/g, '')}`} 
-                                                    target="_blank" 
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center justify-center gap-3 w-full py-4 bg-[#25D366]/10 border border-[#25D366]/20 text-[#25D366] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#25D366]/20 transition-all shadow-[0_0_15px_rgba(37,211,102,0.1)]"
-                                                >
-                                                    <span className="text-lg">📲</span> SOPORTE VÍA WHATSAPP
-                                                </a>
-                                            </div>
-                                        )}
+                                        <div className="pt-4 border-t border-white/5">
+                                            <a 
+                                                href={`https://wa.me/${adminPhone}`} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="flex items-center justify-center gap-3 w-full py-4 bg-[#25D366]/10 border border-[#25D366]/20 text-[#25D366] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#25D366]/20 transition-all shadow-[0_0_15px_rgba(37,211,102,0.1)]"
+                                            >
+                                                <span className="text-lg">📲</span> SOPORTE VÍA WHATSAPP
+                                            </a>
+                                        </div>
                                         
                                         <form onSubmit={handleRecharge} className="space-y-6 border-t border-white/5 pt-6">
                                             <div className="space-y-2">
@@ -348,8 +337,8 @@ export default function WalletPage() {
                                                     required
                                                 >
                                                     <option value="">Seleccione el Banco</option>
-                                                    {sinpeNumbers.map((s: any, idx: number) => (
-                                                        <option key={idx} value={s.bank}>{s.bank} - {s.owner}</option>
+                                                    {publicMethods.map((s: any, idx: number) => (
+                                                        <option key={idx} value={s.name}>{s.name} - {s.sinpePhone}</option>
                                                     ))}
                                                 </select>
                                             </div>
@@ -508,7 +497,7 @@ export default function WalletPage() {
             <section className="glass-panel p-8 bg-black/20">
                 <h3 className="text-sm font-black text-white uppercase italic mb-6 tracking-widest flex items-center gap-3">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Actividad de Recargas
+                    Historial de Transacciones
                 </h3>
                 <div className="space-y-3">
                     {transactions.length > 0 ? (
@@ -519,7 +508,8 @@ export default function WalletPage() {
                                         <p className="font-black text-white text-sm uppercase">{tx.type || 'TRANSFERENCIA'}</p>
                                         {tx.method_type && <span className="text-[8px] bg-white/10 px-2 py-0.5 rounded text-gray-400 font-bold">{tx.method_type}</span>}
                                     </div>
-                                    <p className="text-[10px] text-gray-600 font-bold">{tx.created_at ? new Date(tx.created_at).toLocaleString() : ''}</p>
+                                    <p className="text-[10px] text-gray-400 font-bold mt-1 max-w-[200px] truncate">{tx.details || ''}</p>
+                                    <p className="text-[10px] text-gray-600 font-bold mt-1">{tx.created_at ? new Date(tx.created_at).toLocaleString() : ''}</p>
                                 </div>
                                 <div className="text-right">
                                     <p className={`font-black text-xl ${Number(tx.amount) > 0 ? 'text-emerald-400' : 'text-red-400'}`}>

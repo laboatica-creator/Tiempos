@@ -127,3 +127,7 @@ async function sendWhatsAppNotification(phoneNumber: string, message: string) {
     console.log(`[WHATSAPP MESSAGE to ${phoneNumber}]: ${message}`);
 }
 
+export const getWebhookHealth = (req: Request, res: Response) => {
+    res.status(200).json({ status: 'ACTIVE', message: 'WhatsApp Webhook is running', timestamp: new Date().toISOString() });
+};
+

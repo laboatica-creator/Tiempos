@@ -75,6 +75,25 @@ import whatsappRoutes from './routes/whatsapp.route';
 import adminRoutes from './routes/admin.route';
 import userRoutes from './routes/user.route';
 
+app.get('/api/payment-methods', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query(`SELECT value FROM system_settings WHERE key = 'sinpe_numbers'`);
+    let methods = [];
+    if (result.rows.length > 0) {
+      const parsed = JSON.parse(result.rows[0].value || '[]');
+      methods = parsed.map((p: any) => ({
+        name: p.bank || 'Banco Principal',
+        sinpePhone: p.number,
+        account: p.account || 'N/A',
+        type: 'SINPE MÓVIL'
+      }));
+    }
+    res.json(methods);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch payment methods' });
+  }
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/user', userRoutes);

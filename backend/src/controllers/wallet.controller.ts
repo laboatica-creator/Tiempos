@@ -396,7 +396,7 @@ export const getWalletHistory = async (req: AuthRequest, res: Response) => {
             `
             (SELECT 
                 amount, 
-                'SINPE' as type, 
+                'SINPE_DEPOSIT' as type, 
                 status, 
                 created_at, 
                 method_type,
@@ -410,7 +410,7 @@ export const getWalletHistory = async (req: AuthRequest, res: Response) => {
                 'COMPLETED' as status, 
                 created_at, 
                 'WALLET' as method_type,
-                '' as details
+                description as details
              FROM wallet_transactions wt
              JOIN wallets w ON wt.wallet_id = w.id
              WHERE w.user_id = $1)
