@@ -80,7 +80,14 @@ export const getSinpeDepositsReport = async (req: AuthRequest, res: Response) =>
   try {
       const query = `
         SELECT 
-          sd.*,
+          sd.id,
+          sd.user_id,
+          sd.amount,
+          sd.reference_number,
+          sd.sender_name,
+          sd.method_type,
+          sd.status,
+          sd.created_at,
           u.full_name as user_name,
           u.email as user_email
         FROM sinpe_deposits sd
@@ -104,7 +111,12 @@ export const getWithdrawalsReport = async (req: AuthRequest, res: Response) => {
   try {
       let query = `
         SELECT 
-          wr.*,
+          wr.id,
+          wr.user_id,
+          wr.amount,
+          wr.method,
+          wr.status,
+          wr.created_at,
           u.full_name as user_name,
           u.email as user_email,
           u.phone_number as user_phone
@@ -135,7 +147,11 @@ export const getWinnersReport = async (req: AuthRequest, res: Response) => {
   try {
       const query = `
         SELECT 
-          w.*,
+          w.id,
+          w.user_id,
+          w.draw_id,
+          w.amount,
+          w.created_at,
           u.full_name as user_name,
           u.email as user_email,
           u.phone_number as user_phone,

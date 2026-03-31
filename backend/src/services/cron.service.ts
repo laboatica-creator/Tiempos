@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { pool } from '../database/db';
 
 // Horarios de sorteos
-const TICA_TIMES = ['11:00:00', '14:00:00', '17:00:00', '20:00:00'];
+const TICA_TIMES = ['13:00:00', '16:00:00', '19:30:00'];
 const NICA_TIMES = ['12:00:00', '15:00:00', '18:00:00', '21:00:00'];
 
 /**

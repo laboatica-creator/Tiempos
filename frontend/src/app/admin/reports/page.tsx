@@ -77,9 +77,9 @@ export default function ReportsPage() {
       case 'sinpe':
         return ['#', 'Fecha', 'Usuario', 'Email', 'Monto', 'Referencia', 'Estado'];
       case 'withdrawals':
-        return ['#', 'Fecha', 'Usuario', 'Email', 'Monto', 'Método', 'Estado'];
+        return ['#', 'Fecha', 'Usuario', 'Email', 'Teléfono', 'Monto', 'Método', 'Estado'];
       case 'winnings':
-        return ['#', 'Fecha Sorteo', 'Lotería', 'Usuario', 'Email', 'Teléfono', 'Monto', 'Estado'];
+        return ['#', 'Fecha Sorteo', 'Hora Sorteo', 'Lotería', 'Usuario', 'Email', 'Teléfono', 'Monto', 'Estado'];
       case 'dashboard':
         return ['Métrica', 'Valor'];
       default:
@@ -133,6 +133,7 @@ export default function ReportsPage() {
           baseRow['Fecha'] = row.created_at ? new Date(row.created_at).toLocaleString() : '-';
           baseRow['Usuario'] = row.user_name || row.name || '-';
           baseRow['Email'] = row.user_email || row.email || '-';
+          baseRow['Teléfono'] = row.user_phone || row.phone || '-';
           baseRow['Monto'] = `₡${parseFloat(row.amount || 0).toLocaleString()}`;
           baseRow['Método'] = row.method || '-';
           baseRow['Estado'] = row.status || '-';
@@ -140,6 +141,7 @@ export default function ReportsPage() {
           
         case 'winnings':
           baseRow['Fecha Sorteo'] = row.draw_date ? new Date(row.draw_date).toLocaleDateString() : '-';
+          baseRow['Hora Sorteo'] = row.draw_time || '-';
           baseRow['Lotería'] = row.lottery_type || '-';
           baseRow['Usuario'] = row.user_name || row.name || '-';
           baseRow['Email'] = row.user_email || row.email || '-';
