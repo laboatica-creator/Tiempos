@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { pool } from '../database/db'; // 🔥 CORREGIDO
+import { pool } from '../database/db';
 import { AuthRequest } from '../middlewares/auth.middleware';
 
 // Helper to handle dates
@@ -56,7 +56,7 @@ export const getPlayersReport = async (req: AuthRequest, res: Response) => {
           (SELECT COUNT(*) FROM bets WHERE user_id = users.id) as total_bets,
           (SELECT COALESCE(SUM(amount), 0) FROM bets WHERE user_id = users.id) as total_bet_amount
         FROM users
-        WHERE role = 'PLAYER' AND DATE(created_at) BETWEEN $1 AND $2
+        WHERE role = 'CUSTOMER' AND DATE(created_at) BETWEEN $1 AND $2
       `;
       
       if (status === 'ACTIVO') query = query.replace('WHERE', 'WHERE is_active = true AND');
@@ -168,8 +168,8 @@ export const getDashboardReport = async (req: AuthRequest, res: Response) => {
       console.log('[DASHBOARD] Fechas - Hoy:', today, 'Primer día del mes:', firstDayOfMonth);
       
       const queries = {
-        totalPlayers: `SELECT COUNT(*) as count FROM users WHERE role = 'PLAYER'`,
-        activePlayers: `SELECT COUNT(*) as count FROM users WHERE role = 'PLAYER' AND is_active = true`,
+        totalPlayers: `SELECT COUNT(*) as count FROM users WHERE role = 'CUSTOMER'`,
+        activePlayers: `SELECT COUNT(*) as count FROM users WHERE role = 'CUSTOMER' AND is_active = true`,
         todaySales: `SELECT COALESCE(SUM(amount), 0) as sum FROM bets WHERE DATE(created_at) = $1`,
         monthSales: `SELECT COALESCE(SUM(amount), 0) as sum FROM bets WHERE DATE(created_at) >= $1`,
         pendingWithdrawals: `SELECT COALESCE(SUM(amount), 0) as sum FROM withdrawal_requests WHERE status = 'pending'`,
