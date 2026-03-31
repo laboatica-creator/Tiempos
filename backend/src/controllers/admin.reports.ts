@@ -174,7 +174,7 @@ export const getDashboardReport = async (req: AuthRequest, res: Response) => {
         monthSales: `SELECT COALESCE(SUM(total_amount), 0) as sum FROM bets WHERE DATE(created_at) >= $1`,
         pendingWithdrawals: `SELECT COALESCE(SUM(amount), 0) as sum FROM withdrawal_requests WHERE status = 'pending'`,
         todaySinpe: `SELECT COALESCE(SUM(amount), 0) as sum FROM sinpe_deposits WHERE DATE(created_at) = $1 AND status = 'completed'`,
-        totalWinnings: `SELECT COALESCE(SUM(prize_amount), 0) as sum FROM winnings WHERE DATE(created_at) >= $1`
+        totalWinnings: `SELECT COALESCE(SUM(amount), 0) as sum FROM winnings WHERE DATE(created_at) >= $1`
       };
       
       const [tP, aP, tS, mS, pW, tSinpe, tW] = await Promise.all([
