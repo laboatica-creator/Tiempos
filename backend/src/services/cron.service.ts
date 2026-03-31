@@ -22,7 +22,7 @@ export const generateDrawsForNextDays = async (days: number = 7) => {
       await createDrawIfNotExists('TICA', formattedDate, time);
     }
     
-    // Generar sorteos de NICA (incluye 12:00 PM)
+    // Generar sorteos de NICA
     for (const time of NICA_TIMES) {
       await createDrawIfNotExists('NICA', formattedDate, time);
     }
@@ -43,7 +43,7 @@ const createDrawIfNotExists = async (lottery: string, date: string, time: string
     await pool.query(
       `INSERT INTO draws (lottery_type, draw_date, draw_time, status, max_exposure_limit, min_bet, max_bet) 
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [lottery, date, time, 'scheduled', 50000, 100, 20000]
+      [lottery, date, time, 'OPEN', 50000, 100, 20000]
     );
     console.log(`[CRON] Sorteo creado: ${lottery} ${date} ${time}`);
   }
@@ -60,8 +60,8 @@ const closeExpiredDraws = async () => {
   
   const result = await pool.query(
     `UPDATE draws 
-     SET status = 'closed' 
-     WHERE status = 'scheduled' 
+     SET status = 'CLOSED' 
+     WHERE status = 'OPEN' 
        AND (draw_date < $1 OR (draw_date = $1 AND draw_time < $2))
      RETURNING id, lottery_type, draw_date, draw_time`,
     [currentDate, currentTime]
