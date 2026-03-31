@@ -162,3 +162,4 @@ const startServer = async () => {
 console.log('🔧 [20] Llamando a startServer()...');
 startServer();
 console.log('🔧 [21] startServer() llamado (continuará asincrónicamente)');
+// FORCE DEPLOY - 2026-03-30
