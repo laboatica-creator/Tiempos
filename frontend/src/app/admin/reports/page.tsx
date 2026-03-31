@@ -1,26 +1,43 @@
 'use client';
 import { useState, useEffect } from 'react';
-import ProtectedRoute from '../../../components/ProtectedRoute';
+import { api } from '@/lib/api';
 
 type ReportType = 'sales' | 'players' | 'sinpe' | 'withdrawals' | 'winnings' | 'dashboard';
 
+const reportLabels = {
+  sales: '📊 Ventas y Apuestas',
+  players: '👥 Jugadores',
+  sinpe: '📱 Recargas SINPE',
+  withdrawals: '💸 Retiros',
+  winnings: '🏆 Premios Pagados',
+  dashboard: '📈 Dashboard'
+};
+
 export default function ReportsPage() {
-  const [reportType, setReportType] = useState<ReportType>('sales');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [reportType, setReportType] = useState<ReportType>('dashboard');
+  const [startDate, setStartDate] = useState(() => {
+    const date = new Date();
+    date.setDate(1);
+    return date.toISOString().split('T')[0];
+  });
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
 
-  // Auto load when changing type or dates
   useEffect(() => {
-    fetchReport();
-  }, [reportType]);
+    const t = sessionStorage.getItem('token');
+    setToken(t);
+  }, []);
 
   const fetchReport = async () => {
+    if (!token) {
+      console.error('No token found');
+      return;
+    }
+    
     setLoading(true);
     try {
-      const token = sessionStorage.getItem('token');
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://tiempos-backend.onrender.com/api';
       let endpoint = '';
       switch (reportType) {
         case 'sales': endpoint = '/admin/reports/sales'; break;
@@ -31,121 +48,228 @@ export default function ReportsPage() {
         case 'dashboard': endpoint = '/admin/reports/dashboard'; break;
       }
       
-      const response = await fetch(`${baseUrl}${endpoint}?start_date=${startDate}&end_date=${endDate}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://tiempos-backend.onrender.com'}${endpoint}?start_date=${startDate}&end_date=${endDate}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const result = await response.json();
       
-      // If it's the dashboard it might be an object, let's cast to array to use the unified table
+      // Si es dashboard, mostrar como objeto único
       if (reportType === 'dashboard') {
         setData([result]);
       } else {
-        setData(result);
+        setData(Array.isArray(result) ? result : []);
       }
     } catch (error) {
       console.error('Error al obtener reporte:', error);
+      setData([]);
     } finally {
       setLoading(false);
     }
   };
 
+  // Columnas a mostrar en cada reporte (excluyendo UUIDs y columnas vacías)
+  const getDisplayColumns = (type: ReportType): string[] => {
+    switch (type) {
+      case 'sales':
+        return ['#', 'Fecha', 'Total Apuestas', 'Monto Total', 'Jugadores Únicos'];
+      case 'players':
+        return ['#', 'Nombre', 'Email', 'Teléfono', 'Rol', 'Estado', 'Fecha Registro', 'Total Apuestas', 'Monto Apostado'];
+      case 'sinpe':
+        return ['#', 'Fecha', 'Usuario', 'Email', 'Monto', 'Referencia', 'Estado'];
+      case 'withdrawals':
+        return ['#', 'Fecha', 'Usuario', 'Email', 'Monto', 'Método', 'Estado'];
+      case 'winnings':
+        return ['#', 'Fecha Sorteo', 'Lotería', 'Usuario', 'Email', 'Teléfono', 'Monto', 'Estado'];
+      case 'dashboard':
+        return ['Métrica', 'Valor'];
+      default:
+        return [];
+    }
+  };
+
+  // Mapear datos a filas con números secuenciales
+  const getDisplayRows = (type: ReportType, rows: any[]): any[] => {
+    if (type === 'dashboard') {
+      const metrics = rows[0] || {};
+      return Object.entries(metrics).map(([key, value], idx) => ({
+        '#': idx + 1,
+        'Métrica': key,
+        'Valor': typeof value === 'number' ? `₡${value.toLocaleString()}` : value
+      }));
+    }
+
+    return rows.map((row, idx) => {
+      const baseRow: any = { '#': idx + 1 };
+      
+      switch (type) {
+        case 'sales':
+          baseRow['Fecha'] = row.date ? new Date(row.date).toLocaleDateString() : '-';
+          baseRow['Total Apuestas'] = row.total_bets || 0;
+          baseRow['Monto Total'] = `₡${parseFloat(row.total_amount || 0).toLocaleString()}`;
+          baseRow['Jugadores Únicos'] = row.unique_players || 0;
+          break;
+          
+        case 'players':
+          baseRow['Nombre'] = row.username || row.name || '-';
+          baseRow['Email'] = row.email || '-';
+          baseRow['Teléfono'] = row.phone || row.phone_number || '-';
+          baseRow['Rol'] = row.role || '-';
+          baseRow['Estado'] = row.status || (row.is_active ? 'ACTIVO' : 'INACTIVO');
+          baseRow['Fecha Registro'] = row.registered_date ? new Date(row.registered_date).toLocaleDateString() : '-';
+          baseRow['Total Apuestas'] = row.total_bets || 0;
+          baseRow['Monto Apostado'] = `₡${parseFloat(row.total_bet_amount || 0).toLocaleString()}`;
+          break;
+          
+        case 'sinpe':
+          baseRow['Fecha'] = row.created_at ? new Date(row.created_at).toLocaleString() : '-';
+          baseRow['Usuario'] = row.user_name || row.name || '-';
+          baseRow['Email'] = row.user_email || row.email || '-';
+          baseRow['Monto'] = `₡${parseFloat(row.amount || 0).toLocaleString()}`;
+          baseRow['Referencia'] = row.reference_number || row.details || '-';
+          baseRow['Estado'] = row.status || '-';
+          break;
+          
+        case 'withdrawals':
+          baseRow['Fecha'] = row.created_at ? new Date(row.created_at).toLocaleString() : '-';
+          baseRow['Usuario'] = row.user_name || row.name || '-';
+          baseRow['Email'] = row.user_email || row.email || '-';
+          baseRow['Monto'] = `₡${parseFloat(row.amount || 0).toLocaleString()}`;
+          baseRow['Método'] = row.method || '-';
+          baseRow['Estado'] = row.status || '-';
+          break;
+          
+        case 'winnings':
+          baseRow['Fecha Sorteo'] = row.draw_date ? new Date(row.draw_date).toLocaleDateString() : '-';
+          baseRow['Lotería'] = row.lottery_type || '-';
+          baseRow['Usuario'] = row.user_name || row.name || '-';
+          baseRow['Email'] = row.user_email || row.email || '-';
+          baseRow['Teléfono'] = row.user_phone || row.phone || '-';
+          baseRow['Monto'] = `₡${parseFloat(row.amount || 0).toLocaleString()}`;
+          baseRow['Estado'] = row.status || 'COMPLETED';
+          break;
+      }
+      
+      return baseRow;
+    });
+  };
+
+  const displayColumns = getDisplayColumns(reportType);
+  const displayRows = getDisplayRows(reportType, data);
+
   return (
-    <ProtectedRoute role="ADMIN">
-      <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20 p-4 pt-10">
-        <header className="bg-gradient-to-r from-blue-900/40 to-emerald-900/40 border border-white/10 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
-          <h1 className="text-4xl font-black text-white uppercase italic tracking-tighter">Reportes de Administración</h1>
-        </header>
+    <div className="p-6 min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-3xl font-bold text-white mb-2">📊 Reportes de Administración</h1>
+        <p className="text-gray-400 mb-6">Visualiza y exporta los datos de la plataforma</p>
         
-        <div className="glass-panel p-6 border-white/5 rounded-2xl space-y-6 shadow-xl">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Tipo de Reporte</label>
-                <select 
-                  value={reportType} 
-                  onChange={(e) => setReportType(e.target.value as ReportType)} 
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white text-xs outline-none focus:border-blue-500"
-                >
-                  <option value="dashboard">📈 Dashboard Resumen</option>
-                  <option value="sales">📊 Ventas y Apuestas</option>
-                  <option value="players">👥 Jugadores Activos/Inactivos</option>
-                  <option value="sinpe">📱 Recargas SINPE</option>
-                  <option value="withdrawals">💸 Retiros (SINPE/Banco)</option>
-                  <option value="winnings">🏆 Premios Pagados</option>
-                </select>
+        <div className="bg-white/10 backdrop-blur rounded-xl p-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Tipo de Reporte</label>
+              <select 
+                value={reportType} 
+                onChange={(e) => setReportType(e.target.value as ReportType)}
+                className="w-full p-2 rounded-lg bg-white/5 border border-white/10 text-white"
+              >
+                {Object.entries(reportLabels).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
             </div>
             
-            <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Desde</label>
-                <input 
-                  type="date" 
-                  value={startDate} 
-                  onChange={(e) => setStartDate(e.target.value)} 
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white text-xs outline-none focus:border-blue-500"
-                />
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Desde</label>
+              <input 
+                type="date" 
+                value={startDate} 
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full p-2 rounded-lg bg-white/5 border border-white/10 text-white"
+              />
             </div>
-
-            <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Hasta</label>
-                <input 
-                  type="date" 
-                  value={endDate} 
-                  onChange={(e) => setEndDate(e.target.value)} 
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white text-xs outline-none focus:border-blue-500"
-                />
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Hasta</label>
+              <input 
+                type="date" 
+                value={endDate} 
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full p-2 rounded-lg bg-white/5 border border-white/10 text-white"
+              />
             </div>
-
+            
             <div className="flex items-end">
-                <button 
-                  onClick={fetchReport} 
-                  disabled={loading} 
-                  className="w-full bg-emerald-600/80 hover:bg-emerald-600 text-white font-black px-6 py-3 rounded-xl uppercase text-xs tracking-widest transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {loading ? 'Consultando...' : 'Generar Reporte'}
-                </button>
+              <button 
+                onClick={fetchReport} 
+                disabled={loading}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg transition-all disabled:opacity-50"
+              >
+                {loading ? 'Cargando...' : 'Generar Reporte'}
+              </button>
             </div>
+            
+            {displayRows.length > 0 && (
+              <div className="flex items-end">
+                <button 
+                  onClick={() => {
+                    const csv = displayRows.map(row => displayColumns.map(col => row[col]).join(',')).join('\n');
+                    const blob = new Blob([`${displayColumns.join(',')}\n${csv}`], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${reportType}_report_${startDate}_to_${endDate}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all"
+                >
+                  📥 Exportar CSV
+                </button>
+              </div>
+            )}
           </div>
         </div>
         
-        {data && data.length > 0 && (
-          <div className="glass-panel overflow-x-auto rounded-2xl border-white/5 shadow-2xl relative">
-            {loading && (
-              <div className="absolute inset-0 bg-black/60 z-10 flex items-center justify-center backdrop-blur-sm">
-                 <p className="text-emerald-400 font-bold uppercase tracking-widest text-xs animate-pulse">Sincronizando con Base de Datos...</p>
-              </div>
-            )}
-            <table className="w-full text-left bg-transparent">
-              <thead className="bg-white/5 border-b border-white/10 text-gray-400 text-[10px] uppercase font-black tracking-widest">
-                <tr>
-                  {Object.keys(data[0]).map(key => (
-                    <th key={key} className="p-4 whitespace-nowrap">{key.replace(/_/g, ' ')}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5 text-xs font-bold text-gray-300">
-                {data.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-white/5 transition-all">
-                    {Object.values(row).map((value: any, i) => (
-                      <td key={i} className="p-4 whitespace-nowrap">
-                        {value === null || value === undefined ? '-' : 
-                           typeof value === 'boolean' ? (value ? 'Sí' : 'No') : 
-                           value.toString().includes('1970') || value.toString().includes('T00:00:00') ? new Date(value).toLocaleDateString() : 
-                           value.toString()}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {loading && (
+          <div className="flex justify-center items-center py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500"></div>
           </div>
         )}
         
-        {!loading && (!data || data.length === 0) && (
-          <div className="text-center text-gray-500 mt-10 p-10 border-2 border-dashed border-white/10 rounded-2xl">
-              <p className="text-xs uppercase font-black tracking-[0.2em] opacity-50">No hay datos para el período seleccionado</p>
+        {!loading && displayRows.length > 0 && (
+          <div className="bg-white/5 backdrop-blur rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead className="bg-white/10">
+                  <tr>
+                    {displayColumns.map(col => (
+                      <th key={col} className="px-4 py-3 text-left text-sm font-semibold text-gray-200">
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {displayRows.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-white/5 transition-colors">
+                      {displayColumns.map(col => (
+                        <td key={col} className="px-4 py-3 text-sm text-gray-300">
+                          {row[col] !== undefined && row[col] !== null ? String(row[col]) : '-'}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        
+        {!loading && displayRows.length === 0 && data.length === 0 && (
+          <div className="text-center text-gray-400 py-20">
+            No hay datos para el período seleccionado
           </div>
         )}
       </div>
-    </ProtectedRoute>
+    </div>
   );
 }
