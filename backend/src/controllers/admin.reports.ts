@@ -50,7 +50,7 @@ export const getPlayersReport = async (req: AuthRequest, res: Response) => {
   try {
       let query = `
         SELECT 
-          id, name as username, email, phone_number as phone, role, 
+          id, full_name as username, email, phone_number as phone, role, 
           CASE WHEN is_active THEN 'ACTIVO' ELSE 'INACTIVO' END as status,
           created_at as registered_date,
           (SELECT COUNT(*) FROM bets WHERE user_id = users.id) as total_bets,
