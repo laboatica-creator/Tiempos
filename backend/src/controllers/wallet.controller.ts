@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { pool } from '../index';
 import { AuthRequest } from '../middlewares/auth.middleware';
+import { OCRService } from '../services/ocr.service';
 
 export const getWalletBalance = async (req: AuthRequest, res: Response) => {
     try {
@@ -21,8 +22,6 @@ export const getWalletBalance = async (req: AuthRequest, res: Response) => {
     }
 };
 
-import { OCRService } from '../services/ocr.service';
-
 export const createSinpeRecharge = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
@@ -32,18 +31,15 @@ export const createSinpeRecharge = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ error: 'Referencia requerida.' });
         }
 
-        // Fraud detection: check if reference already exists
         const duplicateCheck = await pool.query(`SELECT id FROM sinpe_deposits WHERE reference_number = $1`, [reference_number]);
         if (duplicateCheck.rows.length > 0) {
             return res.status(400).json({ error: 'Esta referencia ya ha sido registrada.' });
         }
 
-        // Optional OCR Processing if image is provided
         let ocrResult = null;
         if (receipt_image_url) {
             ocrResult = await OCRService.processReceipt(receipt_image_url);
             
-            // Basic fraud detection: compare hash
             const hashCheck = await pool.query(`SELECT id FROM sinpe_deposits WHERE receipt_hash = $1`, [ocrResult.hash]);
             if (hashCheck.rows.length > 0) {
                 return res.status(400).json({ error: 'Este comprobante ya ha sido utilizado.' });
@@ -86,7 +82,6 @@ export const requestWithdrawal = async (req: AuthRequest, res: Response) => {
                 return res.status(400).json({ error: 'Fondos insuficientes para solicitar este retiro.' });
             }
 
-            // Deduct immediately locally to lock funds (or leave as pending logic, here we deduct to lock)
             await client.query(
                 `UPDATE wallets SET balance = balance - $1, updated_at = NOW() WHERE id = $2`,
                 [amount, wallet.id]
@@ -120,7 +115,6 @@ export const approveRecharge = async (req: AuthRequest, res: Response) => {
     try {
         await client.query('BEGIN');
 
-        // Check recharge status
         const rechargeRes = await client.query(
             `SELECT * FROM sinpe_deposits WHERE id = $1 FOR UPDATE`,
             [rechargeId]
@@ -138,13 +132,11 @@ export const approveRecharge = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ error: `Recharge is already ${recharge.status}.` });
         }
 
-        // Update recharge status
         await client.query(
             `UPDATE sinpe_deposits SET status = 'APPROVED', approved_by = $1, updated_at = NOW() WHERE id = $2`,
             [adminId, rechargeId]
         );
 
-        // Credit Wallet
         const walletRes = await client.query(
             `UPDATE wallets SET balance = balance + $1, total_deposits = total_deposits + $1, updated_at = NOW() WHERE user_id = $2 RETURNING id, balance`,
             [recharge.amount, recharge.user_id]
@@ -152,7 +144,6 @@ export const approveRecharge = async (req: AuthRequest, res: Response) => {
 
         const walletId = walletRes.rows[0].id;
 
-        // Create Wallet Transaction
         await client.query(
             `INSERT INTO wallet_transactions (wallet_id, type, amount, description, reference_id) VALUES ($1, 'DEPOSIT', $2, 'SINPE Recharge Approved', $3)`,
             [walletId, recharge.amount, rechargeId]
@@ -191,8 +182,6 @@ export const getPendingRecharges = async (req: AuthRequest, res: Response) => {
         const role = req.user?.role;
         const userId = req.user?.id;
 
-        // FRANCHISE sees only their players' deposits
-        // ADMIN sees only non-franchise players (franchise_id IS NULL)
         let query: string;
         let params: any[];
 
@@ -205,7 +194,6 @@ export const getPendingRecharges = async (req: AuthRequest, res: Response) => {
                 ORDER BY sd.created_at DESC`;
             params = [userId];
         } else {
-            // ADMIN: only players NOT assigned to any franchise
             query = `
                 SELECT sd.*, u.full_name as user_name, u.phone_number, u.email 
                 FROM sinpe_deposits sd 
@@ -227,7 +215,7 @@ export const getPaymentMethods = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const result = await pool.query(
-            `SELECT id, type, provider, last4, is_default FROM payment_methods WHERE user_id = $1 ORDER BY created_at DESC`,
+            `SELECT id, type, bank_name as provider, phone_number, account_number, is_active FROM payment_methods WHERE user_id = $1 ORDER BY created_at DESC`,
             [userId]
         );
         res.json(result.rows);
@@ -248,9 +236,8 @@ export const addPaymentMethod = async (req: AuthRequest, res: Response) => {
 
         const last4 = card_number.slice(-4);
         
-        // Basic check for existing card
         const check = await pool.query(
-            `SELECT id FROM payment_methods WHERE user_id = $1 AND last4 = $2 AND provider = $3`,
+            `SELECT id FROM payment_methods WHERE user_id = $1 AND last4 = $2 AND bank_name = $3`,
             [userId, last4, provider]
         );
 
@@ -259,8 +246,8 @@ export const addPaymentMethod = async (req: AuthRequest, res: Response) => {
         }
 
         const result = await pool.query(
-            `INSERT INTO payment_methods (user_id, type, provider, last4, expiry_date) 
-             VALUES ($1, $2, $3, $4, $5) RETURNING id, type, provider, last4`,
+            `INSERT INTO payment_methods (user_id, type, bank_name, last4, expiry_date) 
+             VALUES ($1, $2, $3, $4, $5) RETURNING id, type, bank_name as provider, last4`,
             [userId, type, provider, last4, expiry_date]
         );
 
@@ -284,14 +271,13 @@ export const deletePaymentMethod = async (req: AuthRequest, res: Response) => {
 };
 
 export const adjustWalletBalance = async (req: AuthRequest, res: Response) => {
-    const { userId, amount, type, description } = req.body; // type: 'CREDIT' or 'DEBIT'
+    const { userId, amount, type, description } = req.body;
     const adminId = req.user?.id;
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // Check if wallet exists
         const walletRes = await client.query(`SELECT id, balance FROM wallets WHERE user_id = $1 FOR UPDATE`, [userId]);
         if (walletRes.rows.length === 0) {
             await client.query('ROLLBACK');
@@ -314,13 +300,11 @@ export const adjustWalletBalance = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ error: 'Insufficient funds for debit' });
         }
 
-        // Update Wallet
         await client.query(
             `UPDATE wallets SET balance = $1, updated_at = NOW() WHERE id = $2`,
             [newBalance, walletId]
         );
 
-        // Record Transaction
         await client.query(
             `INSERT INTO wallet_transactions (wallet_id, type, amount, description, reference_id) 
              VALUES ($1, $2, $3, $4, $5)`,
@@ -355,7 +339,7 @@ export const getPendingWithdrawals = async (req: AuthRequest, res: Response) => 
 
 export const approveWithdrawal = async (req: AuthRequest, res: Response) => {
     const { withdrawalId } = req.params;
-    const { status, admin_notes } = req.body; // APPROVED or REJECTED
+    const { status, admin_notes } = req.body;
     const adminId = req.user?.id;
 
     const client = await pool.connect();
@@ -368,7 +352,6 @@ export const approveWithdrawal = async (req: AuthRequest, res: Response) => {
         if (withdrawal.status !== 'PENDING') throw new Error('Este retiro ya fue procesado.');
 
         if (status === 'REJECTED') {
-            // Refund the wallet since we locked funds on request (see requestWithdrawal)
             await client.query(`UPDATE wallets SET balance = balance + $1 WHERE user_id = $2`, [withdrawal.amount, withdrawal.user_id]);
         }
 
@@ -391,7 +374,6 @@ export const getWalletHistory = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         
-        // Combine pending SINPE deposits and actual wallet transactions
         const result = await pool.query(
             `
             (SELECT 
@@ -433,11 +415,28 @@ export const getWalletTransactions = async (req: AuthRequest, res: Response) => 
 
         let query = `
             SELECT * FROM (
-                (SELECT id, amount, 'SINPE_DEPOSIT' as type, status, created_at, method_type, reference_number as details
-                 FROM sinpe_deposits WHERE user_id = $1)
+                (SELECT 
+                    sd.id, 
+                    sd.amount, 
+                    'SINPE_DEPOSIT' as type, 
+                    sd.status, 
+                    sd.created_at, 
+                    sd.method_type, 
+                    sd.reference_number as details
+                 FROM sinpe_deposits sd 
+                 WHERE sd.user_id = $1)
                 UNION ALL
-                (SELECT wt.id, amount, type::text, 'COMPLETED' as status, created_at, 'WALLET' as method_type, description as details
-                 FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id = w.id WHERE w.user_id = $1)
+                (SELECT 
+                    wt.id, 
+                    wt.amount, 
+                    wt.type::text, 
+                    'COMPLETED' as status, 
+                    wt.created_at, 
+                    'WALLET' as method_type, 
+                    wt.description as details
+                 FROM wallet_transactions wt 
+                 JOIN wallets w ON wt.wallet_id = w.id 
+                 WHERE w.user_id = $1)
             ) as all_txs
             WHERE 1=1
         `;
@@ -446,28 +445,26 @@ export const getWalletTransactions = async (req: AuthRequest, res: Response) => 
 
         if (start_date) {
             paramCount++;
-            query += ` AND DATE(created_at) >= $${paramCount}`;
+            query += ` AND DATE(all_txs.created_at) >= $${paramCount}`;
             params.push(start_date);
         } else {
-            // Default 30 days
-            query += ` AND created_at >= NOW() - INTERVAL '30 days'`;
+            query += ` AND all_txs.created_at >= NOW() - INTERVAL '30 days'`;
         }
 
         if (end_date) {
             paramCount++;
-            query += ` AND DATE(created_at) <= $${paramCount}`;
+            query += ` AND DATE(all_txs.created_at) <= $${paramCount}`;
             params.push(end_date);
         }
 
         if (type && type !== 'ALL') {
             paramCount++;
-            query += ` AND type = $${paramCount}`;
+            query += ` AND all_txs.type = $${paramCount}`;
             params.push(type);
         }
 
-        query += ` ORDER BY created_at DESC`;
+        query += ` ORDER BY all_txs.created_at DESC`;
 
-        // Paginacion
         const offset = (Number(page) - 1) * Number(limit);
         paramCount++;
         query += ` LIMIT $${paramCount}`;
@@ -476,7 +473,6 @@ export const getWalletTransactions = async (req: AuthRequest, res: Response) => 
         query += ` OFFSET $${paramCount}`;
         params.push(offset);
 
-        // Fetch paginado
         const result = await pool.query(query, params);
         
         console.log('Transacciones encontradas:', result.rows);
@@ -493,7 +489,6 @@ export const getWalletTransactions = async (req: AuthRequest, res: Response) => 
 };
 
 export const getDepositHistory = async (req: AuthRequest, res: Response) => {
-    // Legacy support or specific use
     getWalletHistory(req, res);
 };
 
@@ -513,4 +508,3 @@ export const getWinningsHistory = async (req: AuthRequest, res: Response) => {
         res.status(500).json({ error: 'Error fetching winnings' });
     }
 };
-
