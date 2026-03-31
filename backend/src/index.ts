@@ -1,3 +1,5 @@
+import announcementRoutes from './routes/announcement.route';
+import promotionRoutes from './routes/promotion.route';
 import { runMigrations } from './database/migrate';
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
@@ -83,6 +85,8 @@ app.use('/api/draws', drawRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin/reports', adminReportsRoutes);
+app.use('/api/announcements', announcementRoutes);
+app.use('/api/admin/promotions', promotionRoutes);
 
 // 🔥 LOG DE VERIFICACIÓN DE RUTAS
 console.log('✅ [RUTAS REGISTRADAS]');
@@ -95,6 +99,8 @@ console.log('   - /api/whatsapp');
 console.log('   - /api/admin');
 console.log('   - /api/admin/reports');
 console.log('   - /api/payment-methods');
+console.log('   - /api/announcements');
+console.log('   - /api/admin/promotions');
 console.log('🔧 [8] Rutas cargadas');
 
 // PostgreSQL
@@ -162,4 +168,3 @@ const startServer = async () => {
 console.log('🔧 [20] Llamando a startServer()...');
 startServer();
 console.log('🔧 [21] startServer() llamado (continuará asincrónicamente)');
-// FORCE DEPLOY - 2026-03-30

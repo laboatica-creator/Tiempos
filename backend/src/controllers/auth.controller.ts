@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { pool } from '../index';
 import { sendWelcomeEmail, sendPasswordRecoveryEmail } from '../services/email.service';
+import { applyNewUserBonus } from '../services/promotion.service';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkey_tiempos_prod_2026';
 
@@ -60,14 +61,21 @@ export const registerUser = async (req: Request, res: Response) => {
             console.warn('Error enviando correo de bienvenida:', mailErr);
         }
 
+        // Aplicar bono de bienvenida si hay promoción activa
+        try {
+            await applyNewUserBonus(newUser.id);
+        } catch (bonusErr) {
+            console.warn('Error aplicando bono de bienvenida:', bonusErr);
+        }
+
         // Generate token for auto-login
         const token = jwt.sign(
             { 
                 id: newUser.id, 
                 role: newUser.role, 
                 is_master: false,
-                franchise_id: newUser.franchise_id,
-                agent_id: newUser.agent_id
+                franchise_id: franchise_id || null,
+                agent_id: agent_id || null
             },
             JWT_SECRET,
             { expiresIn: '24h' }
