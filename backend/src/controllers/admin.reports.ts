@@ -27,7 +27,7 @@ export const getSalesReport = async (req: AuthRequest, res: Response) => {
         SELECT 
           DATE(created_at) as date,
           COUNT(*) as total_bets,
-          COALESCE(SUM(amount), 0) as total_amount,
+          COALESCE(SUM(total_amount), 0) as total_amount,
           COUNT(DISTINCT user_id) as unique_players
         FROM bets
         WHERE DATE(created_at) BETWEEN $1 AND $2
@@ -54,7 +54,7 @@ export const getPlayersReport = async (req: AuthRequest, res: Response) => {
           CASE WHEN is_active THEN 'ACTIVO' ELSE 'INACTIVO' END as status,
           created_at as registered_date,
           (SELECT COUNT(*) FROM bets WHERE user_id = users.id) as total_bets,
-          (SELECT COALESCE(SUM(amount), 0) FROM bets WHERE user_id = users.id) as total_bet_amount
+          (SELECT COALESCE(SUM(total_amount), 0) FROM bets WHERE user_id = users.id) as total_bet_amount
         FROM users
         WHERE role = 'CUSTOMER' AND DATE(created_at) BETWEEN $1 AND $2
       `;
@@ -170,8 +170,8 @@ export const getDashboardReport = async (req: AuthRequest, res: Response) => {
       const queries = {
         totalPlayers: `SELECT COUNT(*) as count FROM users WHERE role = 'CUSTOMER'`,
         activePlayers: `SELECT COUNT(*) as count FROM users WHERE role = 'CUSTOMER' AND is_active = true`,
-        todaySales: `SELECT COALESCE(SUM(amount), 0) as sum FROM bets WHERE DATE(created_at) = $1`,
-        monthSales: `SELECT COALESCE(SUM(amount), 0) as sum FROM bets WHERE DATE(created_at) >= $1`,
+        todaySales: `SELECT COALESCE(SUM(total_amount), 0) as sum FROM bets WHERE DATE(created_at) = $1`,
+        monthSales: `SELECT COALESCE(SUM(total_amount), 0) as sum FROM bets WHERE DATE(created_at) >= $1`,
         pendingWithdrawals: `SELECT COALESCE(SUM(amount), 0) as sum FROM withdrawal_requests WHERE status = 'pending'`,
         todaySinpe: `SELECT COALESCE(SUM(amount), 0) as sum FROM sinpe_deposits WHERE DATE(created_at) = $1 AND status = 'completed'`,
         totalWinnings: `SELECT COALESCE(SUM(prize_amount), 0) as sum FROM winnings WHERE DATE(created_at) >= $1`
