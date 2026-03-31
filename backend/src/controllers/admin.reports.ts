@@ -50,7 +50,7 @@ export const getPlayersReport = async (req: AuthRequest, res: Response) => {
   try {
       let query = `
         SELECT 
-          id, name as username, email, phone, role, 
+          id, name as username, email, phone_number as phone, role, 
           CASE WHEN is_active THEN 'ACTIVO' ELSE 'INACTIVO' END as status,
           created_at as registered_date,
           (SELECT COUNT(*) FROM bets WHERE user_id = users.id) as total_bets,
@@ -107,7 +107,7 @@ export const getWithdrawalsReport = async (req: AuthRequest, res: Response) => {
           wr.*,
           u.full_name as user_name,
           u.email as user_email,
-          u.phone as user_phone
+          u.phone_number as user_phone
         FROM withdrawal_requests wr
         JOIN users u ON wr.user_id = u.id
         WHERE DATE(wr.created_at) BETWEEN $1 AND $2
@@ -138,7 +138,7 @@ export const getWinnersReport = async (req: AuthRequest, res: Response) => {
           w.*,
           u.full_name as user_name,
           u.email as user_email,
-          u.phone as user_phone,
+          u.phone_number as user_phone,
           d.lottery_type,
           d.draw_date,
           d.draw_time
