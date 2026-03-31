@@ -77,16 +77,24 @@ import adminReportsRoutes from './routes/admin.reports.route';
 import userRoutes from './routes/user.route';
 import paymentRoutes from './routes/payment.route';
 
+// 🔥 Registrar rutas
 app.use('/api/payment-methods', paymentRoutes);
-
 app.use('/api/auth', authRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/bets', betRoutes);
 app.use('/api/draws', drawRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
-app.use('/api/admin/reports', adminReportsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/reports', adminReportsRoutes); // <-- Ruta correcta
+
+// 🔥 Log para confirmar rutas registradas
+console.log('✅ [RUTAS] Auth:', '/api/auth');
+console.log('✅ [RUTAS] Wallet:', '/api/wallet');
+console.log('✅ [RUTAS] Bets:', '/api/bets');
+console.log('✅ [RUTAS] Draws:', '/api/draws');
+console.log('✅ [RUTAS] Admin:', '/api/admin');
+console.log('✅ [RUTAS] Admin Reports:', '/api/admin/reports');
 console.log('🔧 [8] Rutas cargadas');
 
 // PostgreSQL 🔥 CON SSL PARA RENDER
@@ -145,7 +153,6 @@ const startServer = async () => {
     }
 
     console.log(`🌐 [18] Iniciando servidor HTTP en puerto ${PORT}...`);
-    // 🔥 CORRECCIÓN: listen solo con puerto (bind automático a 0.0.0.0)
     httpServer.listen(PORT, () => {
       console.log(`✅ [server]: Server is running on port ${PORT}`);
     });
