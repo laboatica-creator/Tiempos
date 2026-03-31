@@ -81,7 +81,7 @@ export const getSinpeDepositsReport = async (req: AuthRequest, res: Response) =>
       const query = `
         SELECT 
           sd.*,
-          u.name as user_name,
+          u.full_name as user_name,
           u.email as user_email
         FROM sinpe_deposits sd
         JOIN users u ON sd.user_id = u.id
@@ -105,7 +105,7 @@ export const getWithdrawalsReport = async (req: AuthRequest, res: Response) => {
       let query = `
         SELECT 
           wr.*,
-          u.name as user_name,
+          u.full_name as user_name,
           u.email as user_email,
           u.phone as user_phone
         FROM withdrawal_requests wr
@@ -136,7 +136,7 @@ export const getWinnersReport = async (req: AuthRequest, res: Response) => {
       const query = `
         SELECT 
           w.*,
-          u.name as user_name,
+          u.full_name as user_name,
           u.email as user_email,
           u.phone as user_phone,
           d.lottery_type,
