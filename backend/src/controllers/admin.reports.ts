@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { pool } from '../index';
+import { pool } from '../database/db'; // 🔥 CORREGIDO
 import { AuthRequest } from '../middlewares/auth.middleware';
 
 // Helper to handle dates
@@ -27,17 +27,20 @@ export const getSalesReport = async (req: AuthRequest, res: Response) => {
         SELECT 
           DATE(created_at) as date,
           COUNT(*) as total_bets,
-          SUM(total_amount) as total_amount,
+          COALESCE(SUM(amount), 0) as total_amount,
           COUNT(DISTINCT user_id) as unique_players
         FROM bets
-        WHERE created_at BETWEEN $1 AND ($2::date + interval '1 day')
+        WHERE DATE(created_at) BETWEEN $1 AND $2
         GROUP BY DATE(created_at)
         ORDER BY date DESC
       `;
       const result = await pool.query(query, [start_date, end_date]);
       console.log('[REPORTE VENTAS] Registros encontrados:', result.rows.length);
       res.json(result.rows);
-  } catch (err) { res.status(500).json({error: 'Error al obtener reporte de ventas'}) }
+  } catch (err: any) {
+      console.error('[REPORTE VENTAS] ERROR:', err.message);
+      res.status(500).json({ error: 'Error al obtener reporte de ventas', details: err.message });
+  }
 };
 
 // Reporte 2: Jugadores (activos/inactivos)
@@ -47,24 +50,27 @@ export const getPlayersReport = async (req: AuthRequest, res: Response) => {
   try {
       let query = `
         SELECT 
-          id, username as name, email, phone, role, 
-          status as status,
+          id, name as username, email, phone, role, 
+          CASE WHEN is_active THEN 'ACTIVO' ELSE 'INACTIVO' END as status,
           created_at as registered_date,
           (SELECT COUNT(*) FROM bets WHERE user_id = users.id) as total_bets,
-          (SELECT COALESCE(SUM(total_amount), 0) FROM bets WHERE user_id = users.id) as total_bet_amount
+          (SELECT COALESCE(SUM(amount), 0) FROM bets WHERE user_id = users.id) as total_bet_amount
         FROM users
-        WHERE created_at BETWEEN $1 AND ($2::date + interval '1 day')
+        WHERE role = 'PLAYER' AND DATE(created_at) BETWEEN $1 AND $2
       `;
       
-      if (status === 'ACTIVO') query += ` AND status = 'ACTIVE'`;
-      if (status === 'INACTIVO') query += ` AND status = 'INACTIVE'`;
+      if (status === 'ACTIVO') query = query.replace('WHERE', 'WHERE is_active = true AND');
+      if (status === 'INACTIVO') query = query.replace('WHERE', 'WHERE is_active = false AND');
       
       query += ` ORDER BY created_at DESC`;
       
       const result = await pool.query(query, [start_date, end_date]);
       console.log('[REPORTE JUGADORES] Registros encontrados:', result.rows.length);
       res.json(result.rows);
-  } catch (err) { res.status(500).json({error: 'Error al obtener reporte de jugadores'}) }
+  } catch (err: any) {
+      console.error('[REPORTE JUGADORES] ERROR:', err.message);
+      res.status(500).json({ error: 'Error al obtener reporte de jugadores', details: err.message });
+  }
 };
 
 // Reporte 3: Recargas SINPE
@@ -75,17 +81,20 @@ export const getSinpeDepositsReport = async (req: AuthRequest, res: Response) =>
       const query = `
         SELECT 
           sd.*,
-          u.username as user_name,
+          u.name as user_name,
           u.email as user_email
         FROM sinpe_deposits sd
         JOIN users u ON sd.user_id = u.id
-        WHERE sd.created_at BETWEEN $1 AND ($2::date + interval '1 day')
+        WHERE DATE(sd.created_at) BETWEEN $1 AND $2
         ORDER BY sd.created_at DESC
       `;
       const result = await pool.query(query, [start_date, end_date]);
       console.log('[REPORTE SINPE] Registros encontrados:', result.rows.length);
       res.json(result.rows);
-  } catch (err) { res.status(500).json({error: 'Error al obtener reporte sinpe'}) }
+  } catch (err: any) {
+      console.error('[REPORTE SINPE] ERROR:', err.message);
+      res.status(500).json({ error: 'Error al obtener reporte sinpe', details: err.message });
+  }
 };
 
 // Reporte 4: Retiros (SINPE/Banco)
@@ -96,12 +105,12 @@ export const getWithdrawalsReport = async (req: AuthRequest, res: Response) => {
       let query = `
         SELECT 
           wr.*,
-          u.username as user_name,
+          u.name as user_name,
           u.email as user_email,
           u.phone as user_phone
-        FROM withdrawals wr
+        FROM withdrawal_requests wr
         JOIN users u ON wr.user_id = u.id
-        WHERE wr.created_at BETWEEN $1 AND ($2::date + interval '1 day')
+        WHERE DATE(wr.created_at) BETWEEN $1 AND $2
       `;
       
       if (type === 'SINPE') query += ` AND wr.method = 'SINPE'`;
@@ -113,7 +122,10 @@ export const getWithdrawalsReport = async (req: AuthRequest, res: Response) => {
       const result = await pool.query(query, [start_date, end_date]);
       console.log('[REPORTE RETIROS] Registros encontrados:', result.rows.length);
       res.json(result.rows);
-  } catch (err) { res.status(500).json({error: 'Error al obtener reporte retiros'}) }
+  } catch (err: any) {
+      console.error('[REPORTE RETIROS] ERROR:', err.message);
+      res.status(500).json({ error: 'Error al obtener reporte retiros', details: err.message });
+  }
 };
 
 // Reporte 5: Premios Pagados
@@ -124,7 +136,7 @@ export const getWinnersReport = async (req: AuthRequest, res: Response) => {
       const query = `
         SELECT 
           w.*,
-          u.username as user_name,
+          u.name as user_name,
           u.email as user_email,
           u.phone as user_phone,
           d.lottery_type,
@@ -133,15 +145,19 @@ export const getWinnersReport = async (req: AuthRequest, res: Response) => {
         FROM winnings w
         JOIN users u ON w.user_id = u.id
         JOIN draws d ON w.draw_id = d.id
-        WHERE w.created_at BETWEEN $1 AND ($2::date + interval '1 day')
+        WHERE DATE(w.created_at) BETWEEN $1 AND $2
         ORDER BY w.created_at DESC
       `;
       const result = await pool.query(query, [start_date, end_date]);
       console.log('[REPORTE PREMIOS] Registros encontrados:', result.rows.length);
       res.json(result.rows);
-  } catch (err) { res.status(500).json({error: 'Error al obtener reporte premios'}) }
+  } catch (err: any) {
+      console.error('[REPORTE PREMIOS] ERROR:', err.message);
+      res.status(500).json({ error: 'Error al obtener reporte premios', details: err.message });
+  }
 };
 
+// Reporte 6: Dashboard Resumen
 export const getDashboardReport = async (req: AuthRequest, res: Response) => {
   console.log('[DASHBOARD] Generando resumen...');
   try {
@@ -149,14 +165,16 @@ export const getDashboardReport = async (req: AuthRequest, res: Response) => {
       const today = new Date().toLocaleDateString('en-CA', { timeZone });
       const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toLocaleDateString('en-CA', { timeZone });
       
+      console.log('[DASHBOARD] Fechas - Hoy:', today, 'Primer día del mes:', firstDayOfMonth);
+      
       const queries = {
         totalPlayers: `SELECT COUNT(*) as count FROM users WHERE role = 'PLAYER'`,
-        activePlayers: `SELECT COUNT(*) as count FROM users WHERE role = 'PLAYER' AND status = 'ACTIVE'`,
-        todaySales: `SELECT COALESCE(SUM(total_amount), 0) as sum FROM bets WHERE DATE(created_at) = $1`,
-        monthSales: `SELECT COALESCE(SUM(total_amount), 0) as sum FROM bets WHERE DATE(created_at) >= $1`,
-        pendingWithdrawals: `SELECT COALESCE(SUM(amount), 0) as sum FROM withdrawals WHERE status = 'PENDING'`,
-        todaySinpe: `SELECT COALESCE(SUM(amount), 0) as sum FROM sinpe_deposits WHERE DATE(created_at) = $1 AND status = 'COMPLETED'`,
-        totalWinnings: `SELECT COALESCE(SUM(amount), 0) as sum FROM winnings WHERE DATE(created_at) >= $1`
+        activePlayers: `SELECT COUNT(*) as count FROM users WHERE role = 'PLAYER' AND is_active = true`,
+        todaySales: `SELECT COALESCE(SUM(amount), 0) as sum FROM bets WHERE DATE(created_at) = $1`,
+        monthSales: `SELECT COALESCE(SUM(amount), 0) as sum FROM bets WHERE DATE(created_at) >= $1`,
+        pendingWithdrawals: `SELECT COALESCE(SUM(amount), 0) as sum FROM withdrawal_requests WHERE status = 'pending'`,
+        todaySinpe: `SELECT COALESCE(SUM(amount), 0) as sum FROM sinpe_deposits WHERE DATE(created_at) = $1 AND status = 'completed'`,
+        totalWinnings: `SELECT COALESCE(SUM(prize_amount), 0) as sum FROM winnings WHERE DATE(created_at) >= $1`
       };
       
       const [tP, aP, tS, mS, pW, tSinpe, tW] = await Promise.all([
@@ -181,5 +199,8 @@ export const getDashboardReport = async (req: AuthRequest, res: Response) => {
       
       console.log('[DASHBOARD] Resumen generado:', results);
       res.json(results);
-  } catch (err) { res.status(500).json({error: 'Error'}) }
+  } catch (err: any) {
+      console.error('[DASHBOARD] ERROR:', err.message);
+      res.status(500).json({ error: 'Error al generar dashboard', details: err.message });
+  }
 };
