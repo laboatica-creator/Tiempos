@@ -167,4 +167,4 @@ const startServer = async () => {
 
 console.log('🔧 [20] Llamando a startServer()...');
 startServer();
-console.log('🔧 [21] startServer() llamado (continuará asincrónicamente)');
+console.log('🔧 [21] startServer() llamado (continuará asincrónicamente)');" " 
