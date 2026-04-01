@@ -5,7 +5,7 @@ import { authenticateJWT } from '../middlewares/auth.middleware';
 const router = Router();
 
 // Get player's personal betting history
-router.get('/my', authenticateJWT, getUserBets);
+router.get('/', authenticateJWT, getUserBets);
 
 // Place a bet ticket (multiple numbers at once)
 router.post('/place', authenticateJWT, placeBet);

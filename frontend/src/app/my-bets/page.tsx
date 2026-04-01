@@ -3,89 +3,85 @@ import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 
 export default function MyBetsPage() {
-  const [selectedDate, setSelectedDate] = useState(new Date().toLocaleString('en-CA', { timeZone: 'America/Costa_Rica' }).split(',')[0]);
-  const [bets, setBets] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [bets, setBets] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    fetchBets();
-  }, [selectedDate]);
+  const [error, setError] = useState('');
 
   const fetchBets = async () => {
     setLoading(true);
+    setError('');
     try {
       const token = sessionStorage.getItem('token');
-      const response = await api.get(`/bets?date=${selectedDate}`, token);
-      if (Array.isArray(response)) {
-        setBets(response as never[]);
-      } else {
-        setBets([]);
-      }
-    } catch (error) {
-      console.error('Error al obtener jugadas:', error);
+      const data = await api.get(`/bets?date=${selectedDate}`, token);
+      setBets(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError('Error al cargar las jugadas');
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="p-6 pt-10 pb-20 max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <header className="bg-gradient-to-r from-emerald-900/40 to-blue-900/40 border border-white/10 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
-         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-blue-500"></div>
-         <h1 className="text-4xl font-black text-white italic tracking-tighter uppercase">Historial de Jugadas</h1>
-      </header>
+  useEffect(() => {
+    fetchBets();
+  }, [selectedDate]);
 
-      <div className="glass-panel p-6 border-white/5 rounded-2xl flex flex-col md:flex-row gap-4 items-center mb-6 shadow-2xl">
-        <label className="text-xs font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Fecha de Apuestas</label>
+  return (
+    <div className="p-6 min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
+      <h1 className="text-3xl font-bold text-white mb-6">📋 Mis Jugadas</h1>
+      
+      <div className="mb-6">
+        <label className="block text-sm font-medium text-gray-300 mb-2">Seleccionar fecha</label>
         <input 
           type="date" 
           value={selectedDate} 
           onChange={(e) => setSelectedDate(e.target.value)}
-          className="w-full md:w-auto p-3 bg-black/40 border border-white/10 rounded-xl text-white outline-none focus:border-emerald-500 transition-all font-mono"
+          className="p-2 rounded-lg bg-white/5 border border-white/10 text-white"
         />
       </div>
       
       {loading && (
-        <div className="text-center py-10 text-emerald-400 uppercase tracking-widest text-xs font-black animate-pulse">
-            Cargando Tiquetes...
+        <div className="flex justify-center py-10">
+          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-emerald-500"></div>
+        </div>
+      )}
+      
+      {error && (
+        <div className="bg-red-500/20 border border-red-500/30 text-red-400 p-4 rounded-xl">
+          {error}
         </div>
       )}
       
       {!loading && bets.length === 0 && (
-        <div className="py-16 text-center border border-white/5 bg-black/20 rounded-2xl">
-           <span className="text-4xl grayscale opacity-30">🎫</span>
-           <p className="mt-4 text-gray-500 font-bold uppercase tracking-widest text-xs">No hay jugadas para este día</p>
+        <div className="text-center text-gray-400 py-10">
+          No hay jugadas para la fecha seleccionada
         </div>
       )}
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {bets.map((bet: any) => (
-          <div key={bet.id} className="bg-white/5 border border-white/10 p-5 rounded-2xl shadow-xl hover:border-emerald-500/50 transition-all">
-            <div className="flex justify-between items-start mb-4">
-               <div>
-                  <span className="font-black text-white text-lg tracking-tighter uppercase">{bet.lottery_type}</span>
-                  <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                     Sorteo: {new Date(bet.draw_date).toLocaleDateString()} {bet.draw_time}
-                  </div>
-               </div>
-               <span className="text-emerald-400 font-black text-xl">₡{Number(bet.total_amount).toLocaleString()}</span>
-            </div>
-
-            <div className="space-y-2 border-t border-white/5 pt-4">
-               {bet.items && bet.items.map((item: any, i: number) => (
-                  <div key={i} className="flex justify-between items-center text-sm">
-                      <span className="text-gray-400 font-mono font-bold">🎯 {item.number}</span>
-                      <span className="text-emerald-500/80">₡{Number(item.amount).toLocaleString()}</span>
-                  </div>
-               ))}
-               {!bet.items && <div className="text-xs text-gray-500">Sin detalle de números (legacy)</div>}
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-white/5 flex justify-between items-center">
-               <span className="text-[10px] uppercase font-bold text-gray-500 tracking-widest">Estado</span>
-               <span className={`text-[10px] uppercase font-black px-2 py-1 rounded bg-black/40 border ${bet.status === 'WON' ? 'border-emerald-500 text-emerald-400' : bet.status === 'LOST' ? 'border-red-500/50 text-red-400/80' : 'border-gray-500 text-gray-400'}`}>
-                  {bet.status}
-               </span>
+      <div className="space-y-4">
+        {bets.map((bet) => (
+          <div key={bet.id} className="bg-white/5 border border-white/10 rounded-xl p-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <span className={`px-2 py-1 rounded text-xs font-bold ${
+                  bet.status === 'ACTIVE' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+                }`}>
+                  {bet.status === 'ACTIVE' ? '✓ Activa' : '⏳ Pendiente'}
+                </span>
+                <p className="text-white font-bold text-lg mt-2">
+                  {bet.lottery_type} - {bet.draw_date} {bet.draw_time}
+                </p>
+                <p className="text-gray-400 text-sm mt-1">
+                  Números: {Array.isArray(bet.items) ? bet.items.map((i: any) => `${i.number} (₡${i.amount})`).join(', ') : '-'}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-emerald-400 font-bold text-xl">₡{Number(bet.total_amount).toLocaleString()}</p>
+                <p className="text-gray-500 text-xs mt-1">
+                  {new Date(bet.created_at).toLocaleString()}
+                </p>
+              </div>
             </div>
           </div>
         ))}
