@@ -1,5 +1,6 @@
 import './globals.css';
 import type { Metadata } from 'next';
+import AnnouncementBanner from '@/components/AnnouncementBanner';
 
 export const metadata: Metadata = {
   title: 'Tiempos - Premium Betting',
@@ -26,6 +27,9 @@ export default function RootLayout({
         <main className="flex-1 w-full flex flex-col p-4 md:p-8">
           {children}
         </main>
+        
+        {/* Banner de Anuncios - aparece en la parte inferior */}
+        <AnnouncementBanner />
         
         {/* Footer Global with WhatsApp */}
         <footer className="w-full bg-[#1e293b] border-t border-white/5 py-8 mt-auto hidden lg:flex flex-col items-center justify-center gap-4">
