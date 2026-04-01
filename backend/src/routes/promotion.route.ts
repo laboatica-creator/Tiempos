@@ -17,35 +17,34 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 router.post('/', async (req: Request, res: Response) => {
-  const { name, description, type, bonus_amount, is_active, start_date, end_date } = req.body;
+  const { name, description, type, bonus_amount, is_active } = req.body;
   try {
     const result = await pool.query(
-      `INSERT INTO promotions (name, description, type, bonus_amount, is_active, start_date, end_date) 
-       VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), NULLIF($7, '')) RETURNING *`,
-      [name, description, type, bonus_amount, is_active ?? true, start_date || null, end_date || null]
+      `INSERT INTO promotions (name, description, type, bonus_amount, is_active) 
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [name, description, type, bonus_amount, is_active ?? true]
     );
     res.status(201).json(result.rows[0]);
   } catch (err: any) {
     console.error('Error creating promotion:', err);
-    res.status(500).json({ error: 'Error al crear promoción' });
+    res.status(500).json({ error: 'Error al crear promoción', details: err.message });
   }
 });
 
 router.put('/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { name, description, type, bonus_amount, is_active, start_date, end_date } = req.body;
+  const { name, description, type, bonus_amount, is_active } = req.body;
   try {
     const result = await pool.query(
       `UPDATE promotions 
-       SET name = $1, description = $2, type = $3, bonus_amount = $4, is_active = $5, 
-           start_date = NULLIF($6, ''), end_date = NULLIF($7, ''), updated_at = NOW()
-       WHERE id = $8 RETURNING *`,
-      [name, description, type, bonus_amount, is_active, start_date || null, end_date || null, id]
+       SET name = $1, description = $2, type = $3, bonus_amount = $4, is_active = $5, updated_at = NOW()
+       WHERE id = $6 RETURNING *`,
+      [name, description, type, bonus_amount, is_active, id]
     );
     res.json(result.rows[0]);
   } catch (err: any) {
     console.error('Error updating promotion:', err);
-    res.status(500).json({ error: 'Error al actualizar promoción' });
+    res.status(500).json({ error: 'Error al actualizar promoción', details: err.message });
   }
 });
 

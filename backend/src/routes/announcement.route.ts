@@ -4,17 +4,17 @@ import {
   getActiveAnnouncement, 
   getAllAnnouncements, 
   createAnnouncement, 
+  updateAnnouncement,
   deleteAnnouncement 
 } from '../controllers/announcement.controller';
 
 const router = Router();
 
-// Ruta pública para obtener anuncio activo
 router.get('/active', getActiveAnnouncement);
 
-// Rutas protegidas para admin
 router.get('/', authenticateJWT, requireRole(['ADMIN']), getAllAnnouncements);
 router.post('/', authenticateJWT, requireRole(['ADMIN']), createAnnouncement);
+router.put('/:id', authenticateJWT, requireRole(['ADMIN']), updateAnnouncement);
 router.delete('/:id', authenticateJWT, requireRole(['ADMIN']), deleteAnnouncement);
 
 export default router;
