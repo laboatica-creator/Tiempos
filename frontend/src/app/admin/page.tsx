@@ -374,6 +374,15 @@ export default function AdminDashboardPage() {
                 <p className="font-bold group-hover:text-emerald-400 text-sm">Verificar SINPE</p>
                 <p className="text-[10px] text-gray-500 uppercase">{stats.pendingSinpe} depósitos pendientes</p>
               </Link>
+              {/* 🔥 NUEVOS ENLACES AGREGADOS */}
+              <Link href="/admin/announcements" className="w-full text-left p-4 rounded-xl bg-white/5 border border-white/10 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all group block">
+                <p className="font-bold group-hover:text-emerald-400 text-sm">📢 Anuncios</p>
+                <p className="text-[10px] text-gray-500 uppercase">Gestionar banner de mensajes</p>
+              </Link>
+              <Link href="/admin/promotions" className="w-full text-left p-4 rounded-xl bg-white/5 border border-white/10 hover:border-purple-500/50 hover:bg-purple-500/5 transition-all group block">
+                <p className="font-bold group-hover:text-purple-400 text-sm">🎁 Promociones</p>
+                <p className="text-[10px] text-gray-500 uppercase">Bonos y ofertas especiales</p>
+              </Link>
               <button 
                 onClick={() => setShowCloseModal(true)}
                 className="w-full text-left p-4 rounded-xl bg-white/5 border border-white/10 hover:border-red-500/50 hover:bg-red-500/5 transition-all group block"
@@ -482,14 +491,14 @@ export default function AdminDashboardPage() {
                       <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${tx.type === 'BET' ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
                         {tx.type}
                       </span>
-                   </td>
+                    </td>
                    <td className="px-8 py-5 text-white font-black">₡{Number(tx.amount).toLocaleString()}</td>
                    <td className="px-8 py-5">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-emerald-400" />
                         <span className="text-sm font-medium">Completado</span>
                       </div>
-                   </td>
+                    </td>
                    <td className="px-8 py-5 text-gray-600 text-sm">{new Date(tx.created_at).toLocaleTimeString()}</td>
                 </tr>
               ))}
