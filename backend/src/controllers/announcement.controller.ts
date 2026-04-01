@@ -11,7 +11,7 @@ export const getActiveAnnouncement = async (req: Request, res: Response) => {
        LIMIT 1`
     );
     res.json(result.rows[0] || null);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching announcement:', error);
     res.status(500).json({ error: 'Error al obtener anuncio', details: error.message });
   }
@@ -21,7 +21,7 @@ export const getAllAnnouncements = async (req: Request, res: Response) => {
   try {
     const result = await pool.query(`SELECT * FROM announcements ORDER BY created_at DESC`);
     res.json(result.rows);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching announcements:', error);
     res.status(500).json({ error: 'Error al listar anuncios' });
   }
@@ -37,9 +37,9 @@ export const createAnnouncement = async (req: Request, res: Response) => {
       [message, is_active ?? true, interval_seconds || 300, duration_seconds || 4]
     );
     res.status(201).json(result.rows[0]);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating announcement:', error);
-    res.status(500).json({ error: 'Error al crear anuncio' });
+    res.status(500).json({ error: 'Error al crear anuncio', details: error.message });
   }
 };
 
@@ -54,9 +54,9 @@ export const updateAnnouncement = async (req: Request, res: Response) => {
       [message, is_active, interval_seconds, duration_seconds, id]
     );
     res.json(result.rows[0]);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating announcement:', error);
-    res.status(500).json({ error: 'Error al actualizar anuncio' });
+    res.status(500).json({ error: 'Error al actualizar anuncio', details: error.message });
   }
 };
 
@@ -65,8 +65,8 @@ export const deleteAnnouncement = async (req: Request, res: Response) => {
   try {
     await pool.query('DELETE FROM announcements WHERE id = $1', [id]);
     res.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting announcement:', error);
-    res.status(500).json({ error: 'Error al eliminar anuncio' });
+    res.status(500).json({ error: 'Error al eliminar anuncio', details: error.message });
   }
 };

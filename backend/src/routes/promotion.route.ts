@@ -12,7 +12,7 @@ router.get('/', async (req: Request, res: Response) => {
     res.json(result.rows);
   } catch (err: any) {
     console.error('Error listing promotions:', err);
-    res.status(500).json({ error: 'Error al listar promociones' });
+    res.status(500).json({ error: 'Error al listar promociones', details: err.message });
   }
 });
 
@@ -52,9 +52,9 @@ router.delete('/:id', async (req: Request, res: Response) => {
   try {
     await pool.query('DELETE FROM promotions WHERE id = $1', [req.params.id]);
     res.json({ success: true });
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error deleting promotion:', err);
-    res.status(500).json({ error: 'Error al eliminar promoción' });
+    res.status(500).json({ error: 'Error al eliminar promoción', details: err.message });
   }
 });
 
