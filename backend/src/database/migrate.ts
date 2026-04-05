@@ -59,7 +59,6 @@ export const runMigrations = async () => {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
-    // Ensure missing columns in users
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_master BOOLEAN DEFAULT FALSE`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT '[]'`);
     console.log('✅ [Migration] Table users ensured');
@@ -96,7 +95,6 @@ export const runMigrations = async () => {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
-    // Ensure missing columns in draws
     await client.query(`ALTER TABLE draws ADD COLUMN IF NOT EXISTS max_exposure_limit DECIMAL(15, 2) DEFAULT 50000.00`);
     await client.query(`ALTER TABLE draws ADD COLUMN IF NOT EXISTS min_bet DECIMAL(12, 2) DEFAULT 100.00`);
     await client.query(`ALTER TABLE draws ADD COLUMN IF NOT EXISTS max_bet DECIMAL(12, 2) DEFAULT 20000.00`);
@@ -115,7 +113,6 @@ export const runMigrations = async () => {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
-    // Ensure missing columns in bets
     await client.query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS commission_amount DECIMAL(15, 2) DEFAULT 0.00`);
     await client.query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS agent_commission DECIMAL(15, 2) DEFAULT 0.00`);
     console.log('✅ [Migration] Table bets ensured');
@@ -149,7 +146,6 @@ export const runMigrations = async () => {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
-    // Ensure missing columns in sinpe_deposits
     await client.query(`ALTER TABLE sinpe_deposits ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100) NULL`);
     await client.query(`ALTER TABLE sinpe_deposits ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP WITH TIME ZONE NULL`);
     console.log('✅ [Migration] Table sinpe_deposits ensured');
@@ -191,7 +187,7 @@ export const runMigrations = async () => {
         user_id UUID NOT NULL REFERENCES users(id),
         bet_id UUID NOT NULL REFERENCES bets(id),
         amount DECIMAL(15, 2) NOT NULL,
-        type VARCHAR(20) DEFAULT 'SALE', -- SALE, WIN
+        type VARCHAR(20) DEFAULT 'SALE',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
@@ -274,7 +270,6 @@ export const runMigrations = async () => {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
-    // Ensure columns for payment_methods (specifically requested)
     await client.query(`ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100)`);
     await client.query(`ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20)`);
     await client.query(`ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS account_number VARCHAR(50)`);
@@ -282,7 +277,6 @@ export const runMigrations = async () => {
     await client.query(`ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'SINPE'`);
     await client.query(`ALTER TABLE payment_methods ALTER COLUMN user_id DROP NOT NULL`);
     
-    // Insert dynamic payment methods (SINPE examples)
     await client.query(`
       INSERT INTO payment_methods (bank_name, phone_number, type) VALUES
       ('Banco Nacional', '1234-5678', 'SINPE'),
@@ -308,14 +302,12 @@ export const runMigrations = async () => {
     `);
     console.log('✅ [Migration] Table cards ensured');
 
-    // ANNOUNCEMENTS
+    // ANNOUNCEMENTS (corregido: sin start_date y end_date)
     await client.query(`
       CREATE TABLE IF NOT EXISTS announcements (
         id SERIAL PRIMARY KEY,
         message TEXT NOT NULL,
         is_active BOOLEAN DEFAULT true,
-        start_date TIMESTAMP,
-        end_date TIMESTAMP,
         interval_seconds INTEGER DEFAULT 300,
         duration_seconds INTEGER DEFAULT 4,
         created_at TIMESTAMP DEFAULT NOW(),
@@ -324,7 +316,7 @@ export const runMigrations = async () => {
     `);
     console.log('✅ [Migration] Table announcements ensured');
 
-    // PROMOTIONS
+    // PROMOTIONS (corregido: sin start_date y end_date)
     await client.query(`
       CREATE TABLE IF NOT EXISTS promotions (
         id SERIAL PRIMARY KEY,
@@ -333,8 +325,6 @@ export const runMigrations = async () => {
         type VARCHAR(50) NOT NULL,
         bonus_amount DECIMAL(10,2) DEFAULT 0,
         trigger_condition JSONB,
-        start_date TIMESTAMP,
-        end_date TIMESTAMP,
         is_active BOOLEAN DEFAULT true,
         applied_count INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT NOW(),
