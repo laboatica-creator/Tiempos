@@ -188,8 +188,8 @@ export const getDashboardReport = async (req: AuthRequest, res: Response) => {
         activePlayers: `SELECT COUNT(*) as count FROM users WHERE role = 'CUSTOMER' AND is_active = true`,
         todaySales: `SELECT COALESCE(SUM(total_amount), 0) as sum FROM bets WHERE DATE(created_at) = $1`,
         monthSales: `SELECT COALESCE(SUM(total_amount), 0) as sum FROM bets WHERE DATE(created_at) >= $1`,
-        pendingWithdrawals: `SELECT COALESCE(SUM(amount), 0) as sum FROM withdrawal_requests WHERE status = 'pending'`,
-        todaySinpe: `SELECT COALESCE(SUM(amount), 0) as sum FROM sinpe_deposits WHERE DATE(created_at) = $1 AND status = 'completed'`,
+        pendingWithdrawals: `SELECT COALESCE(SUM(amount), 0) as sum FROM withdrawal_requests WHERE status = 'PENDING'`,  // 🔥 CORREGIDO: 'pending' -> 'PENDING'
+        todaySinpe: `SELECT COALESCE(SUM(amount), 0) as sum FROM sinpe_deposits WHERE DATE(created_at) = $1 AND status = 'COMPLETED'`,  // 🔥 CORREGIDO: 'completed' -> 'COMPLETED'
         totalWinnings: `SELECT COALESCE(SUM(amount), 0) as sum FROM winnings WHERE DATE(created_at) >= $1`
       };
       
