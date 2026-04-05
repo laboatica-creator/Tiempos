@@ -265,16 +265,95 @@ export const runMigrations = async () => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS payment_methods (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        type VARCHAR(20) NOT NULL,
-        provider VARCHAR(50) NOT NULL,
-        last4 VARCHAR(4) NOT NULL,
-        expiry_date VARCHAR(10) NULL,
-        is_default BOOLEAN DEFAULT FALSE,
+        user_id UUID NULL REFERENCES users(id) ON DELETE CASCADE,
+        type VARCHAR(20) DEFAULT 'SINPE',
+        bank_name VARCHAR(100),
+        phone_number VARCHAR(20),
+        account_number VARCHAR(50),
+        is_active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    // Ensure columns for payment_methods (specifically requested)
+    await client.query(`ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100)`);
+    await client.query(`ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20)`);
+    await client.query(`ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS account_number VARCHAR(50)`);
+    await client.query(`ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true`);
+    await client.query(`ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'SINPE'`);
+    await client.query(`ALTER TABLE payment_methods ALTER COLUMN user_id DROP NOT NULL`);
+    
+    // Insert dynamic payment methods (SINPE examples)
+    await client.query(`
+      INSERT INTO payment_methods (bank_name, phone_number, type) VALUES
+      ('Banco Nacional', '1234-5678', 'SINPE'),
+      ('Banco de Costa Rica', '8765-4321', 'SINPE'),
+      ('BAC San José', '1122-3344', 'SINPE')
+      ON CONFLICT DO NOTHING
+    `);
     console.log('✅ [Migration] Table payment_methods ensured');
+
+    // CARDS
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cards (
+        id SERIAL PRIMARY KEY,
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        card_number_masked VARCHAR(20),
+        card_type VARCHAR(20),
+        expiry_month INTEGER,
+        expiry_year INTEGER,
+        holder_name VARCHAR(100),
+        is_default BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('✅ [Migration] Table cards ensured');
+
+    // ANNOUNCEMENTS
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS announcements (
+        id SERIAL PRIMARY KEY,
+        message TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT true,
+        start_date TIMESTAMP,
+        end_date TIMESTAMP,
+        interval_seconds INTEGER DEFAULT 300,
+        duration_seconds INTEGER DEFAULT 4,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('✅ [Migration] Table announcements ensured');
+
+    // PROMOTIONS
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS promotions (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        description TEXT,
+        type VARCHAR(50) NOT NULL,
+        bonus_amount DECIMAL(10,2) DEFAULT 0,
+        trigger_condition JSONB,
+        start_date TIMESTAMP,
+        end_date TIMESTAMP,
+        is_active BOOLEAN DEFAULT true,
+        applied_count INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('✅ [Migration] Table promotions ensured');
+
+    // PROMOTION APPLICATIONS
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS promotion_applications (
+        id SERIAL PRIMARY KEY,
+        promotion_id INTEGER REFERENCES promotions(id) ON DELETE CASCADE,
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        amount DECIMAL(10,2),
+        applied_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('✅ [Migration] Table promotion_applications ensured');
 
     // DRAW EXPOSURE
     await client.query(`

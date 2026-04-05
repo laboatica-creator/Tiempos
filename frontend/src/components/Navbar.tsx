@@ -62,6 +62,8 @@ const Navbar = () => {
             { name: 'Sorteos', path: '/admin/results', icon: '🎰', show: isMaster || perms.includes('draws') },
             { name: 'Recargas', path: '/admin/recharges', icon: '💰', show: isMaster || perms.includes('recharges') },
             { name: 'Afiliados', path: '/admin/players', icon: '👥', show: isMaster || perms.includes('players') },
+            { name: 'Anuncios', path: '/admin/announcements', icon: '📢', show: isMaster || perms.includes('announcements') },
+            { name: 'Promociones', path: '/admin/promotions', icon: '🎁', show: isMaster || perms.includes('promotions') },
             { name: 'Salir', path: '/login', icon: '🔚', onClick: handleLogout, show: true },
         ].filter(i => i.show);
     } else {

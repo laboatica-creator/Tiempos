@@ -12,7 +12,8 @@ export default function AnnouncementBanner() {
     const fetchAndShow = async () => {
       try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://tiempos-backend.onrender.com';
-        const response = await fetch(`${apiUrl}/api/announcements/active`);
+        // 🔥 CORREGIDO: eliminar '/api' duplicado
+        const response = await fetch(`${apiUrl}/announcements/active`);
         if (!response.ok) return;
         
         const data = await response.json();

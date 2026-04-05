@@ -165,37 +165,48 @@ export const getNumberExposure = async (req: Request, res: Response) => {
 };
 
 export const getUserBets = async (req: AuthRequest, res: Response) => {
+  try {
     const userId = req.user?.id;
     const { date } = req.query;
-    try {
-        let query = `
-            SELECT b.id, b.total_amount, b.status, b.created_at,
-                   d.lottery_type, d.draw_date, d.draw_time,
-                   COALESCE(
-                     json_agg(
-                       json_build_object('number', bi.number, 'amount', bi.amount, 'status', bi.status)
-                     ) FILTER (WHERE bi.id IS NOT NULL), '[]'
-                   ) as items
-            FROM bets b
-            JOIN draws d ON b.draw_id = d.id
-            LEFT JOIN bet_items bi ON bi.bet_id = b.id
-            WHERE b.user_id = $1
-        `;
-        const params: any[] = [userId];
-
-        if (date) {
-            query += ` AND DATE(b.created_at) = $2`;
-            params.push(date);
-        }
-
-        query += ` GROUP BY b.id, d.lottery_type, d.draw_date, d.draw_time ORDER BY b.created_at DESC`;
-
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching user bets:', error);
-        res.status(500).json({ error: 'Internal server error' });
+    
+    let query = `
+      SELECT 
+        b.id,
+        b.total_amount as amount,
+        b.status,
+        b.created_at,
+        d.lottery_type,
+        d.draw_date,
+        d.draw_time,
+        COALESCE(
+          (SELECT json_agg(json_build_object('number', bi.number, 'amount', bi.amount)) FROM bet_items bi WHERE bi.bet_id = b.id),
+          '[]'::json
+        ) as items
+      FROM bets b
+      JOIN draws d ON b.draw_id = d.id
+      WHERE b.user_id = $1
+    `;
+    
+    const params: any[] = [userId];
+    let paramCount = 1;
+    
+    if (date) {
+      paramCount++;
+      query += ` AND DATE(b.created_at) = $${paramCount}`;
+      params.push(date);
     }
+    
+    query += ` ORDER BY b.created_at DESC`;
+    
+    const result = await pool.query(query, params);
+    
+    console.log(`[BETS] Usuario ${userId} tiene ${result.rows.length} apuestas`);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching user bets:', error);
+    res.status(500).json({ error: 'Error al obtener historial de apuestas' });
+  }
 };
 
 export const cancelBet = async (req: AuthRequest, res: Response) => {

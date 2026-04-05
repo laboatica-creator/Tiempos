@@ -212,50 +212,35 @@ export const getPendingRecharges = async (req: AuthRequest, res: Response) => {
 };
 
 export const getPaymentMethods = async (req: AuthRequest, res: Response) => {
-    try {
-        const userId = req.user?.id;
-        const result = await pool.query(
-            `SELECT id, type, bank_name as provider, phone_number, account_number, is_active FROM payment_methods WHERE user_id = $1 ORDER BY created_at DESC`,
-            [userId]
-        );
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching payment methods:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
+  try {
+    const userId = req.user?.id;
+    const result = await pool.query(
+      `SELECT id, type, bank_name, phone_number, account_number, is_active FROM payment_methods WHERE user_id = $1 OR user_id IS NULL ORDER BY created_at DESC`,
+      [userId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching payment methods:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 export const addPaymentMethod = async (req: AuthRequest, res: Response) => {
-    try {
-        const userId = req.user?.id;
-        const { type, provider, card_number, expiry_date } = req.body;
+  try {
+    const userId = req.user?.id;
+    const { type, bank_name, phone_number, account_number } = req.body;
 
-        if (!card_number || card_number.length < 13) {
-            return res.status(400).json({ error: 'Invalid card number' });
-        }
+    const result = await pool.query(
+      `INSERT INTO payment_methods (user_id, type, bank_name, phone_number, account_number) 
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [userId, type, bank_name, phone_number, account_number]
+    );
 
-        const last4 = card_number.slice(-4);
-        
-        const check = await pool.query(
-            `SELECT id FROM payment_methods WHERE user_id = $1 AND last4 = $2 AND bank_name = $3`,
-            [userId, last4, provider]
-        );
-
-        if (check.rows.length > 0) {
-            return res.status(400).json({ error: 'This card is already registered.' });
-        }
-
-        const result = await pool.query(
-            `INSERT INTO payment_methods (user_id, type, bank_name, last4, expiry_date) 
-             VALUES ($1, $2, $3, $4, $5) RETURNING id, type, bank_name as provider, last4`,
-            [userId, type, provider, last4, expiry_date]
-        );
-
-        res.status(201).json(result.rows[0]);
-    } catch (error) {
-        console.error('Error adding payment method:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error adding payment method:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 export const deletePaymentMethod = async (req: AuthRequest, res: Response) => {

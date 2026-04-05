@@ -3,17 +3,23 @@ import { pool } from '../database/db';
 
 export const getActiveAnnouncement = async (req: Request, res: Response) => {
   try {
+    const timeZone = 'America/Costa_Rica';
+    const now = new Date().toLocaleDateString('en-CA', { timeZone }) + ' ' + new Date().toLocaleTimeString('en-CA', { timeZone, hour12: false });
+    
     const result = await pool.query(
       `SELECT id, message, duration_seconds, interval_seconds 
        FROM announcements 
        WHERE is_active = true 
+         AND (start_date IS NULL OR start_date <= $1)
+         AND (end_date IS NULL OR end_date >= $1)
        ORDER BY created_at DESC 
-       LIMIT 1`
+       LIMIT 1`,
+      [now]
     );
     res.json(result.rows[0] || null);
   } catch (error: any) {
-    console.error('Error fetching announcement:', error);
-    res.status(500).json({ error: 'Error al obtener anuncio', details: error.message });
+    console.error('[ANNOUNCEMENTS] Error fetching announcement:', error);
+    res.status(500).json({ error: 'Error al obtener anuncio activo' });
   }
 };
 
