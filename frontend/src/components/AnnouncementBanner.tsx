@@ -43,12 +43,8 @@ export default function AnnouncementBanner() {
   if (!visible || !message) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-emerald-600 to-emerald-800 text-white py-3 px-4 shadow-[0_-5px_15px_rgba(0,0,0,0.5)] z-[100] overflow-hidden">
-      <div className="animate-marquee whitespace-nowrap">
-        <span className="text-sm font-bold tracking-widest uppercase inline-block mr-8">📢 {message}</span>
-        <span className="text-sm font-bold tracking-widest uppercase inline-block mr-8">📢 {message}</span>
-        <span className="text-sm font-bold tracking-widest uppercase inline-block">📢 {message}</span>
-      </div>
+    <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-emerald-600 to-emerald-800 text-white text-center py-3 px-4 shadow-[0_-5px_15px_rgba(0,0,0,0.5)] z-[100] animate-in slide-in-from-bottom flex justify-center items-center">
+      <span className="text-sm font-bold tracking-widest uppercase">📢 {message}</span>
     </div>
   );
 }
