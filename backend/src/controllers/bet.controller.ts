@@ -80,15 +80,22 @@ export const placeBet = async (req: AuthRequest, res: Response) => {
             totalBetAmount += amount;
         }
 
-        // Deduct from Wallet
+        // Deduct from Wallet (usando bonus_balance primero)
         const walletRes = await client.query(
-            `UPDATE wallets SET balance = balance - $1, total_bets = total_bets + $1, updated_at = NOW() WHERE user_id = $2 AND balance >= $1 RETURNING id`,
+            `UPDATE wallets 
+             SET 
+               bonus_balance = CASE WHEN bonus_balance >= $1 THEN bonus_balance - $1 ELSE 0 END,
+               balance = balance - CASE WHEN bonus_balance >= $1 THEN 0 ELSE ($1 - bonus_balance) END,
+               total_bets = total_bets + $1,
+               updated_at = NOW()
+             WHERE user_id = $2 AND (balance + bonus_balance) >= $1
+             RETURNING id, balance, bonus_balance`,
             [totalBetAmount, userId]
         );
 
         if (walletRes.rows.length === 0) {
             await client.query('ROLLBACK');
-            return res.status(400).json({ error: 'Insufficient wallet balance.' });
+            return res.status(400).json({ error: 'Saldo insuficiente (sumando balance y bono).' });
         }
 
         const walletId = walletRes.rows[0].id;
@@ -255,7 +262,7 @@ export const cancelBet = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ error: 'No se puede anular o modificar una jugada a menos de 20 minutos del sorteo.' });
         }
 
-        // 2. Refund wallet
+        // 2. Refund wallet (reembolsar a balance, no a bonus_balance)
         const walletRes = await client.query(
             `UPDATE wallets SET balance = balance + $1, updated_at = NOW() WHERE user_id = $2 RETURNING id`,
             [bet.total_amount, userId]
