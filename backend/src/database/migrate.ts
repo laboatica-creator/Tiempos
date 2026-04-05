@@ -69,6 +69,7 @@ export const runMigrations = async () => {
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         balance DECIMAL(15, 2) DEFAULT 0.00,
+        bonus_balance DECIMAL(15, 2) DEFAULT 0.00,
         total_deposits DECIMAL(15, 2) DEFAULT 0.00,
         total_bets DECIMAL(15, 2) DEFAULT 0.00,
         total_winnings DECIMAL(15, 2) DEFAULT 0.00,
@@ -77,6 +78,7 @@ export const runMigrations = async () => {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    await client.query(`ALTER TABLE wallets ADD COLUMN IF NOT EXISTS bonus_balance DECIMAL(15, 2) DEFAULT 0.00`);
     console.log('✅ [Migration] Table wallets ensured');
 
     // DRAWS

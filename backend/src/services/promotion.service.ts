@@ -34,15 +34,15 @@ export const applyNewUserBonus = async (userId: string) => {
         const walletId = walletResult.rows[0].id;
         
         await client.query(
-          `UPDATE wallets SET balance = balance + $1, total_deposits = total_deposits + $1 
+          `UPDATE wallets SET bonus_balance = bonus_balance + $1 
            WHERE user_id = $2`,
           [promo.bonus_amount, userId]
         );
         
         await client.query(
           `INSERT INTO wallet_transactions (wallet_id, type, amount, description, reference_id)
-           VALUES ($1, 'DEPOSIT', $2, $3, NULL)`,
-          [walletId, promo.bonus_amount, `Promoción: ${promo.name}`]
+           VALUES ($1, 'BONUS', $2, $3, NULL)`,
+          [walletId, promo.bonus_amount, `Bono bienvenida: ${promo.name}`]
         );
         
         await client.query(
