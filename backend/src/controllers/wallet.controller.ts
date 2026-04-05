@@ -7,7 +7,7 @@ export const getWalletBalance = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const result = await pool.query(
-            `SELECT balance, total_deposits, total_bets, total_winnings FROM wallets WHERE user_id = $1`,
+            `SELECT balance, bonus_balance, total_deposits, total_bets, total_winnings FROM wallets WHERE user_id = $1`,
             [userId]
         );
 
@@ -61,48 +61,51 @@ export const createSinpeRecharge = async (req: AuthRequest, res: Response) => {
 };
 
 export const requestWithdrawal = async (req: AuthRequest, res: Response) => {
+    const userId = req.user?.id;
+    const { amount, method, details } = req.body;
+    
+    if (!amount || amount <= 0) return res.status(400).json({ error: 'Monto inválido.' });
+    if (!method || !['SINPE', 'IBAN'].includes(method)) return res.status(400).json({ error: 'Método no válido.' });
+    if (method === 'IBAN' && !details) return res.status(400).json({ error: 'Se requiere el número de cuenta IBAN.' });
+
+    const client = await pool.connect();
     try {
-        const userId = req.user?.id;
-        const { amount, method, details } = req.body;
-
-        if (!amount || amount <= 0) return res.status(400).json({ error: 'Monto inválido.' });
-        if (!method || !['SINPE', 'IBAN'].includes(method)) return res.status(400).json({ error: 'Método no válido.' });
-        if (method === 'IBAN' && !details) return res.status(400).json({ error: 'Se requiere el número de cuenta IBAN.' });
-
-        const client = await pool.connect();
-        try {
-            await client.query('BEGIN');
-
-            const walletRes = await client.query('SELECT id, balance FROM wallets WHERE user_id = $1 FOR UPDATE', [userId]);
-            if (walletRes.rows.length === 0) throw new Error('Billetera no encontrada');
-            const wallet = walletRes.rows[0];
-
-            if (Number(wallet.balance) < Number(amount)) {
-                await client.query('ROLLBACK');
-                return res.status(400).json({ error: 'Fondos insuficientes para solicitar este retiro.' });
-            }
-
-            await client.query(
-                `UPDATE wallets SET balance = balance - $1, updated_at = NOW() WHERE id = $2`,
-                [amount, wallet.id]
-            );
-
-            await client.query(
-                `INSERT INTO withdrawal_requests (user_id, amount, method, details, status) VALUES ($1, $2, $3, $4, 'PENDING')`,
-                [userId, amount, method, details || 'SINPE REGISTRADO']
-            );
-
-            await client.query('COMMIT');
-            res.status(201).json({ message: 'Solicitud de retiro enviada correctamente. Fondos bloqueados temporalmente.' });
-        } catch (e: any) {
+        await client.query('BEGIN');
+        
+        // Obtener balance real (excluyendo el bono)
+        const walletRes = await client.query(
+            'SELECT id, balance FROM wallets WHERE user_id = $1 FOR UPDATE', 
+            [userId]
+        );
+        
+        if (walletRes.rows.length === 0) {
             await client.query('ROLLBACK');
-            res.status(500).json({ error: e.message });
-        } finally {
-            client.release();
+            return res.status(404).json({ error: 'Billetera no encontrada' });
         }
-    } catch (error) {
-        console.error('Error requesting withdrawal:', error);
-        res.status(500).json({ error: 'Error interno de servidor' });
+        
+        const wallet = walletRes.rows[0];
+        if (Number(wallet.balance) < Number(amount)) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ 
+                error: 'Fondos insuficientes. Recuerda que el saldo de bono no es retirable.' 
+            });
+        }
+        
+        await client.query('UPDATE wallets SET balance = balance - $1, updated_at = NOW() WHERE id = $2', [amount, wallet.id]);
+        await client.query(
+            `INSERT INTO withdrawal_requests (user_id, amount, method, details, status) 
+             VALUES ($1, $2, $3, $4, 'PENDING')`,
+            [userId, amount, method, details]
+        );
+        
+        await client.query('COMMIT');
+        res.json({ message: 'Solicitud de retiro enviada correctamente.' });
+    } catch (e: any) {
+        await client.query('ROLLBACK');
+        console.error('Error requesting withdrawal:', e);
+        res.status(500).json({ error: 'Error procesando retiro', details: e.message });
+    } finally {
+        client.release();
     }
 };
 
@@ -212,35 +215,53 @@ export const getPendingRecharges = async (req: AuthRequest, res: Response) => {
 };
 
 export const getPaymentMethods = async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.user?.id;
-    const result = await pool.query(
-      `SELECT id, type, bank_name, phone_number, account_number, is_active FROM payment_methods WHERE user_id = $1 OR user_id IS NULL ORDER BY created_at DESC`,
-      [userId]
-    );
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error fetching payment methods:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+    try {
+        const userId = req.user?.id;
+        const result = await pool.query(
+            `SELECT id, type, bank_name, phone_number, account_number, is_active 
+             FROM payment_methods 
+             WHERE user_id = $1 OR user_id IS NULL
+             ORDER BY user_id NULLS FIRST, created_at DESC`,
+            [userId]
+        );
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching payment methods:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 };
 
 export const addPaymentMethod = async (req: AuthRequest, res: Response) => {
-  try {
-    const userId = req.user?.id;
-    const { type, bank_name, phone_number, account_number } = req.body;
+    try {
+        const userId = req.user?.id;
+        const { type, provider, card_number, expiry_date } = req.body;
 
-    const result = await pool.query(
-      `INSERT INTO payment_methods (user_id, type, bank_name, phone_number, account_number) 
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [userId, type, bank_name, phone_number, account_number]
-    );
+        if (!card_number || card_number.length < 13) {
+            return res.status(400).json({ error: 'Invalid card number' });
+        }
 
-    res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error('Error adding payment method:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+        const last4 = card_number.slice(-4);
+        
+        const check = await pool.query(
+            `SELECT id FROM payment_methods WHERE user_id = $1 AND last4 = $2 AND bank_name = $3`,
+            [userId, last4, provider]
+        );
+
+        if (check.rows.length > 0) {
+            return res.status(400).json({ error: 'This card is already registered.' });
+        }
+
+        const result = await pool.query(
+            `INSERT INTO payment_methods (user_id, type, bank_name, last4, expiry_date) 
+             VALUES ($1, $2, $3, $4, $5) RETURNING id, type, bank_name as provider, last4`,
+            [userId, type, provider, last4, expiry_date]
+        );
+
+        res.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error('Error adding payment method:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 };
 
 export const deletePaymentMethod = async (req: AuthRequest, res: Response) => {
