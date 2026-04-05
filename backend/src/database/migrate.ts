@@ -20,7 +20,7 @@ export const runMigrations = async () => {
       { name: 'user_role', values: ["'CUSTOMER'", "'AGENT'", "'FRANCHISE'", "'ADMIN'"] },
       { name: 'lottery_type', values: ["'TICA'", "'NICA'"] },
       { name: 'draw_status', values: ["'OPEN'", "'CLOSED'", "'FINISHED'", "'CANCELLED'"] },
-      { name: 'tx_type', values: ["'DEPOSIT'", "'BET'", "'WIN'", "'WITHDRAW'", "'COMMISSION'", "'REFUND'"] }
+      { name: 'tx_type', values: ["'DEPOSIT'", "'BET'", "'WIN'", "'WITHDRAW'", "'COMMISSION'", "'REFUND'", "'BONUS'"] }
     ];
 
     for (const type of types) {
