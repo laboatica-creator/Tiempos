@@ -3,14 +3,11 @@ import { pool } from '../database/db';
 export const applyNewUserBonus = async (userId: string) => {
   const client = await pool.connect();
   try {
-    const now = new Date();
     const result = await client.query(
       `SELECT * FROM promotions 
        WHERE type = 'NEW_USER_BONUS' 
-         AND is_active = true 
-         AND (start_date IS NULL OR start_date <= $1)
-         AND (end_date IS NULL OR end_date >= $1)`,
-      [now]
+         AND is_active = true`,
+      []
     );
 
     for (const promo of result.rows) {
@@ -32,6 +29,7 @@ export const applyNewUserBonus = async (userId: string) => {
         
         if (walletResult.rows.length === 0) {
           console.log(`[PROMO] Usuario ${userId} no tiene wallet`);
+          await client.query('ROLLBACK');
           continue;
         }
         
@@ -70,6 +68,7 @@ export const applyNewUserBonus = async (userId: string) => {
     }
   } catch (error) {
     console.error('[PROMO] Error aplicando bono:', error);
+    await client.query('ROLLBACK');
   } finally {
     client.release();
   }
