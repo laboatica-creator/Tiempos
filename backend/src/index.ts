@@ -1,3 +1,4 @@
+import webhookRoutes from './routes/webhook.route';
 import announcementRoutes from './routes/announcement.route';
 import promotionRoutes from './routes/promotion.route';
 import { runMigrations } from './database/migrate';
