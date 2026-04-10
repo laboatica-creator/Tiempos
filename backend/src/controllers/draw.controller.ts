@@ -179,4 +179,14 @@ export const cancelDraw = async (req: AuthRequest, res: Response) => {
     } finally {
         client.release();
     }
+export const getSuggestedResults = async (req: AuthRequest, res: Response) => {
+    try {
+        const { ScraperService } = await import('../services/scraper.service');
+        const suggestions = await ScraperService.getSuggestedResults();
+        res.json(suggestions);
+    } catch (error) {
+        console.error('Error getting suggestions:', error);
+        res.json({ tica: null, nica: null, error: 'No se pudieron obtener sugerencias' });
+    }
+};
 };
