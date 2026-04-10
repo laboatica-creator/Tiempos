@@ -1,13 +1,13 @@
-import { Request, Response } from 'express';
-import { pool } from '../index';
+import { Response } from 'express';
+import { pool } from '../database/db';
 import { AuthRequest } from '../middlewares/auth.middleware';
 
 export const getDashboardStats = async (req: AuthRequest, res: Response) => {
     try {
         const role = req.user?.role;
         const userId = req.user?.id;
-        // Ensure today is the local date in Costa Rica
-        const today = new Date().toLocaleDateString('en-CA'); 
+        const timeZone = 'America/Costa_Rica';
+        const today = new Date().toLocaleDateString('en-CA', { timeZone }); 
 
         let salesQuery = `SELECT SUM(total_amount) as total FROM bets WHERE created_at::date = $1 AND status != 'CANCELLED'`;
         let winQuery = `SELECT SUM(amount) as total FROM winnings WHERE created_at::date = $1`;
@@ -30,18 +30,20 @@ export const getDashboardStats = async (req: AuthRequest, res: Response) => {
             withdrawParams.push(userId);
         }
 
-        const salesRes = await pool.query(salesQuery, queryParams);
-        const winningsRes = await pool.query(winQuery, queryParams);
-        const usersRes = await pool.query(userQuery, noParamQuery);
-        const pendingSinpe = await pool.query(sinpeQuery, noParamQuery);
-        const pendingWithdrawals = await pool.query(withdrawQuery, withdrawParams);
+        const [salesRes, winningsRes, usersRes, pendingSinpe, pendingWithdrawals] = await Promise.all([
+            pool.query(salesQuery, queryParams),
+            pool.query(winQuery, queryParams),
+            pool.query(userQuery, noParamQuery),
+            pool.query(sinpeQuery, noParamQuery),
+            pool.query(withdrawQuery, withdrawParams)
+        ]);
 
         res.json({
-            todaySales: salesRes.rows[0].total || 0,
-            todayWinnings: winningsRes.rows[0].total || 0,
-            totalUsers: usersRes.rows[0].total || 0,
-            pendingSinpe: pendingSinpe.rows[0].total || 0,
-            pendingWithdrawals: pendingWithdrawals.rows[0].total || 0
+            todaySales: parseFloat(salesRes.rows[0].total || 0),
+            todayWinnings: parseFloat(winningsRes.rows[0].total || 0),
+            totalUsers: parseInt(usersRes.rows[0].total || 0),
+            pendingSinpe: parseInt(pendingSinpe.rows[0].total || 0),
+            pendingWithdrawals: parseInt(pendingWithdrawals.rows[0].total || 0)
         });
     } catch (error) {
         console.error('Error fetching admin stats:', error);
@@ -86,7 +88,7 @@ export const getRecentTransactions = async (req: AuthRequest, res: Response) => 
         
         if (type && type !== 'ALL') {
              queryParams.push(type);
-             query += ` AND wt.type = $${queryParams.length}::tx_type`;
+             query += ` AND wt.type::text = $${queryParams.length}`;
         }
 
         query += ` ORDER BY wt.created_at DESC LIMIT 100`;
@@ -105,7 +107,7 @@ export const getAllPlayers = async (req: AuthRequest, res: Response) => {
         const userId = req.user?.id;
 
         let query = `
-             SELECT u.id, u.full_name, u.national_id, u.phone_number, u.is_active, u.created_at, w.balance 
+             SELECT u.id, u.full_name, u.email, u.national_id, u.phone_number, u.is_active, u.created_at, w.balance, w.bonus_balance 
              FROM users u
              LEFT JOIN wallets w ON u.id = w.user_id
              WHERE u.role = 'CUSTOMER' ${role === 'FRANCHISE' ? 'AND u.franchise_id = $1' : ''}
@@ -151,7 +153,6 @@ export const deletePlayer = async (req: AuthRequest, res: Response) => {
 export const getRiskExposure = async (req: AuthRequest, res: Response) => {
     const { lotteryType } = req.params;
     try {
-        // Find the most recent OPEN draw for this lottery type
         const drawRes = await pool.query(
             `SELECT id FROM draws WHERE lottery_type = $1 AND status IN ('OPEN', 'CLOSED') ORDER BY draw_date ASC, draw_time ASC LIMIT 1`,
             [lotteryType]
@@ -162,7 +163,6 @@ export const getRiskExposure = async (req: AuthRequest, res: Response) => {
         }
 
         const drawId = drawRes.rows[0].id;
-
         const exposureRes = await pool.query(
             `SELECT bi.number, SUM(bi.amount) as total_amount 
              FROM bet_items bi
@@ -189,12 +189,10 @@ export const getAllFranchises = async (req: AuthRequest, res: Response) => {
         const result = await pool.query(
             `SELECT u.id, u.full_name, u.national_id, u.phone_number, u.email, u.is_active, u.created_at,
                     w.balance,
-                    COUNT(p.id) as player_count
+                    (SELECT COUNT(*) FROM users WHERE franchise_id = u.id AND role = 'CUSTOMER') as player_count
              FROM users u
              LEFT JOIN wallets w ON u.id = w.user_id
-             LEFT JOIN users p ON p.franchise_id = u.id AND p.role = 'CUSTOMER'
              WHERE u.role = 'FRANCHISE'
-             GROUP BY u.id, u.full_name, u.national_id, u.phone_number, u.email, u.is_active, u.created_at, w.balance
              ORDER BY u.created_at DESC`
         );
         res.json(result.rows);
@@ -207,15 +205,9 @@ export const getAllFranchises = async (req: AuthRequest, res: Response) => {
 export const deleteFranchise = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     try {
-        // Unlink players from this franchise before deleting
         await pool.query(`UPDATE users SET franchise_id = NULL WHERE franchise_id = $1`, [id]);
-        const result = await pool.query(
-            `DELETE FROM users WHERE id = $1 AND role = 'FRANCHISE' RETURNING id`,
-            [id]
-        );
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Franquicia no encontrada.' });
-        }
+        const result = await pool.query(`DELETE FROM users WHERE id = $1 AND role = 'FRANCHISE' RETURNING id`, [id]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Franquicia no encontrada.' });
         res.json({ message: 'Franquicia eliminada exitosamente.' });
     } catch (error) {
         console.error('Error deleting franchise:', error);
@@ -225,37 +217,25 @@ export const deleteFranchise = async (req: AuthRequest, res: Response) => {
 
 export const getAdmins = async (req: AuthRequest, res: Response) => {
     try {
-        if (!req.user?.is_master) {
-            return res.status(403).json({ error: 'Sólo el Administrador Maestro puede ver esta lista.' });
-        }
         const result = await pool.query(
             `SELECT id, full_name, email, is_active, is_master, permissions, created_at FROM users WHERE role = 'ADMIN' ORDER BY is_master DESC, created_at DESC`
         );
         res.json(result.rows);
     } catch (error) {
-        console.error(error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
 
 export const updateAdminPermissions = async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const { permissions, is_active } = req.body;
     try {
-        const { id } = req.params;
-        const { permissions, is_active } = req.body;
-        
-        if (!req.user?.is_master) {
-            return res.status(403).json({ error: 'No autorizado. Se requiere nivel maestro.' });
-        }
-
-        const result = await pool.query(
-            `UPDATE users SET permissions = $1, is_active = $2, updated_at = NOW() WHERE id = $3 AND role = 'ADMIN' AND is_master = FALSE RETURNING id`,
+        await pool.query(
+            `UPDATE users SET permissions = $1, is_active = $2, updated_at = NOW() WHERE id = $3 AND role = 'ADMIN' AND is_master = FALSE`,
             [JSON.stringify(permissions), is_active, id]
         );
-
-        if (result.rows.length === 0) return res.status(404).json({ error: 'Administrador no encontrado o es el maestro.' });
         res.json({ message: 'Permisos actualizados correctamente.' });
     } catch (error) {
-        console.error(error);
         res.status(500).json({ error: 'Error al actualizar permisos.' });
     }
 };
@@ -263,23 +243,15 @@ export const updateAdminPermissions = async (req: AuthRequest, res: Response) =>
 export const createAdmin = async (req: AuthRequest, res: Response) => {
     const { full_name, email, password, permissions } = req.body;
     try {
-        if (!req.user?.is_master) {
-            return res.status(403).json({ error: 'No autorizado.' });
-        }
-
         const bcrypt = require('bcrypt');
         const password_hash = await bcrypt.hash(password, 10);
-        
-        const result = await pool.query(
+        await pool.query(
             `INSERT INTO users (full_name, email, password_hash, role, permissions, national_id, phone_number, date_of_birth) 
-             VALUES ($1, $2, $3, 'ADMIN', $4, 'ADM-' || encode(gen_random_bytes(4), 'hex'), '506-' || encode(gen_random_bytes(4), 'hex'), '2000-01-01') 
-             RETURNING id`,
+             VALUES ($1, $2, $3, 'ADMIN', $4, 'ADM-' || encode(gen_random_bytes(4), 'hex'), '506-' || encode(gen_random_bytes(4), 'hex'), '2000-01-01')`,
             [full_name, email, password_hash, JSON.stringify(permissions)]
         );
-
-        res.status(201).json({ message: 'Nuevo administrador creado exitosamente.', id: result.rows[0].id });
+        res.status(201).json({ message: 'Nuevo administrador creado exitosamente.' });
     } catch (error: any) {
-        console.error('Error creating admin:', error);
         if (error.code === '23505') return res.status(409).json({ error: 'El correo electrónico ya está en uso.' });
         res.status(500).json({ error: 'Error interno al crear administrador.' });
     }
@@ -288,19 +260,13 @@ export const createAdmin = async (req: AuthRequest, res: Response) => {
 export const promoteToFranchise = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     try {
-        if (!req.user?.is_master && req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'No autorizado.' });
-        }
-
         const result = await pool.query(
-            `UPDATE users SET role = 'FRANCHISE', updated_at = NOW() WHERE id = $1 RETURNING id, full_name`,
+            `UPDATE users SET role = 'FRANCHISE', updated_at = NOW() WHERE id = $1 RETURNING full_name`,
             [id]
         );
-
         if (result.rows.length === 0) return res.status(404).json({ error: 'No se encontró el usuario.' });
         res.json({ message: `¡Usuario ${result.rows[0].full_name} ascendido a FRANQUICIA exitosamente!` });
     } catch (error) {
-        console.error(error);
         res.status(500).json({ error: 'Error del servidor al ascender usuario.' });
     }
 };
@@ -314,7 +280,6 @@ export const getSystemSettings = async (req: AuthRequest, res: Response) => {
         });
         res.json(settings);
     } catch (error) {
-        console.error('Error fetching settings:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -322,10 +287,6 @@ export const getSystemSettings = async (req: AuthRequest, res: Response) => {
 export const updateSystemSettings = async (req: AuthRequest, res: Response) => {
     const { key, value } = req.body;
     try {
-        if (req.user?.role !== 'ADMIN' && !req.user?.is_master) {
-            return res.status(403).json({ error: 'Solo el administrador puede cambiar configuraciones globales.' });
-        }
-        
         await pool.query(
             `INSERT INTO system_settings (key, value, updated_at) VALUES ($1, $2, NOW())
              ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
@@ -333,7 +294,6 @@ export const updateSystemSettings = async (req: AuthRequest, res: Response) => {
         );
         res.json({ message: `Configuración '${key}' actualizada exitosamente.` });
     } catch (error) {
-        console.error('Error updating settings:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -359,8 +319,6 @@ export const getSalesReport = async (req: AuthRequest, res: Response) => {
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (error) {
-        console.error('Error fetching sales report:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
-

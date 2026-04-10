@@ -109,6 +109,7 @@ export const runMigrations = async () => {
         user_id UUID NOT NULL REFERENCES users(id),
         draw_id UUID NOT NULL REFERENCES draws(id),
         total_amount DECIMAL(15, 2) NOT NULL,
+        bonus_amount DECIMAL(15, 2) DEFAULT 0.00,
         commission_amount DECIMAL(15, 2) DEFAULT 0.00,
         agent_commission DECIMAL(15, 2) DEFAULT 0.00,
         status VARCHAR(20) DEFAULT 'ACTIVE',
@@ -116,6 +117,7 @@ export const runMigrations = async () => {
       )
     `);
     await client.query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS commission_amount DECIMAL(15, 2) DEFAULT 0.00`);
+    await client.query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS bonus_amount DECIMAL(15, 2) DEFAULT 0.00`);
     await client.query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS agent_commission DECIMAL(15, 2) DEFAULT 0.00`);
     console.log('✅ [Migration] Table bets ensured');
 
