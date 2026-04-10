@@ -1,41 +1,46 @@
 import { Request, Response } from 'express';
 import { pool } from '../database/db';
-import { OCRService } from '../services/ocr.service';
 
 export const processSinpeWebhook = async (req: Request, res: Response) => {
     try {
-        const { image_url, phone } = req.body;
+        console.log('[WEBHOOK] Body recibido:', req.body);
         
-        if (!image_url) {
-            return res.status(400).json({ error: 'Se requiere image_url' });
-        }
-
-        let ocrData = null;
-        try {
-            ocrData = await OCRService.processReceipt(image_url);
-        } catch (e) {
-            console.warn('OCR Failed, continuing without OCR data');
-            ocrData = { amount: null, referenceNumber: null, hash: null };
+        const { phone, amount, reference_number, user_id } = req.body;
+        
+        // Validación básica
+        if (!amount || !reference_number) {
+            return res.status(400).json({ error: 'Faltan amount o reference_number' });
         }
         
-        let userId = null;
-        if (phone) {
+        let userId = user_id;
+        
+        // Buscar usuario por teléfono si no se proporcionó user_id
+        if (!userId && phone) {
             const userRes = await pool.query(
-                `SELECT id FROM users WHERE phone_number LIKE $1`, 
-                [`%${phone.slice(-8)}`]
+                `SELECT id FROM users WHERE phone_number = $1`,
+                [phone]
             );
-            if (userRes.rows.length > 0) userId = userRes.rows[0].id;
+            if (userRes.rows.length > 0) {
+                userId = userRes.rows[0].id;
+                console.log('[WEBHOOK] Usuario encontrado:', userId);
+            }
         }
         
+        if (!userId) {
+            return res.status(400).json({ error: 'No se pudo identificar el usuario' });
+        }
+        
+        // Insertar la recarga
         await pool.query(
-            `INSERT INTO sinpe_deposits (user_id, amount, reference_number, receipt_hash, status, method_type, bank_name) 
-             VALUES ($1, $2, $3, $4, 'PENDING', 'WEBHOOK', $5)`,
-            [userId, ocrData?.amount || null, ocrData?.referenceNumber || null, ocrData?.hash || null, 'SINPE MOVIL']
+            `INSERT INTO sinpe_deposits (user_id, amount, reference_number, status, method_type) 
+             VALUES ($1, $2, $3, 'PENDING', 'WEBHOOK')`,
+            [userId, amount, reference_number]
         );
         
-        res.json({ success: true, amount: ocrData?.amount });
+        console.log('[WEBHOOK] Recarga registrada correctamente');
+        res.json({ success: true, message: 'Recarga registrada correctamente' });
     } catch (error) {
-        console.error('Webhook error:', error);
-        res.status(500).json({ error: 'Error procesando webhook' });
+        console.error('[WEBHOOK] Error:', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
     }
 };
