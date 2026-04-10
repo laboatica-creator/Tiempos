@@ -21,9 +21,7 @@ export default function AdminResultsPage() {
     const [isMounted, setIsMounted] = useState(false);
     const [countdown, setCountdown] = useState('--:--:--');
     const [resultsDate, setResultsDate] = useState(new Date().toLocaleDateString('en-CA'));
-    const [startDate, setStartDate] = useState(new Date().toLocaleDateString('en-CA'));
-    const [endDate, setEndDate] = useState(new Date().toLocaleDateString('en-CA'));
-    const [suggestions, setSuggestions] = useState<{tica: string | null, nica: string | null}>({tica: null, nica: null});
+    const [suggestions, setSuggestions] = useState<{ number: string | null, waiting: boolean, message: string }>({ number: null, waiting: false, message: '' });
     const drawsRef = useRef<Draw[]>([]);
 
     useEffect(() => { drawsRef.current = draws; }, [draws]);
@@ -31,10 +29,16 @@ export default function AdminResultsPage() {
     useEffect(() => {
         setIsMounted(true);
         fetchDraws();
-        fetchSuggestions();
         const interval = setInterval(() => updateClosestDraw(), 1000);
         return () => clearInterval(interval);
     }, []);
+
+    // 🔥 Nuevo: Buscar sugerencias cuando cambia el sorteo seleccionado
+    useEffect(() => {
+        if (selectedDraw) {
+            fetchSuggestions();
+        }
+    }, [selectedDraw]);
 
     const fetchDraws = async () => {
         try {
@@ -51,9 +55,22 @@ export default function AdminResultsPage() {
     const fetchSuggestions = async () => {
         try {
             const token = sessionStorage.getItem('token');
-            const data = await api.get('/draws/suggestions', token);
-            if (data && !data.error) setSuggestions(data);
-        } catch (err) { console.error('Error fetching suggestions:', err); }
+            if (!selectedDraw) return;
+            
+            console.log('[FRONTEND] Buscando sugerencias para drawId:', selectedDraw);
+            const data = await api.get(`/draws/suggestions?drawId=${selectedDraw}`, token);
+            console.log('[FRONTEND] Sugerencias recibidas:', data);
+            
+            if (data && !data.error) {
+                setSuggestions({
+                    number: data.number || null,
+                    waiting: data.waiting || false,
+                    message: data.message || ''
+                });
+            }
+        } catch (err) { 
+            console.error('Error fetching suggestions:', err); 
+        }
     };
 
     const updateClosestDraw = useCallback(() => {
@@ -88,14 +105,17 @@ export default function AdminResultsPage() {
                     alert('✅ Éxito al procesar sorteo.');
                     setWinningNumber('');
                     fetchDraws();
+                    fetchSuggestions();
                 }
             } catch (err) { alert('Error al procesar.'); }
             finally { setProcessing(false); }
         }
     };
 
-    const useSuggestion = (num: string) => {
-        setWinningNumber(num);
+    const useSuggestion = () => {
+        if (suggestions.number) {
+            setWinningNumber(suggestions.number);
+        }
     };
 
     if (!isMounted) return null;
@@ -106,6 +126,10 @@ export default function AdminResultsPage() {
         return dDate === resultsDate && (d.status === 'OPEN' || d.status === 'CLOSED');
     });
 
+    // Obtener el tipo de sorteo seleccionado para mostrar en la sugerencia
+    const selectedDrawObj = draws.find(d => d.id === selectedDraw);
+    const suggestionType = selectedDrawObj?.lottery_type || 'SORTEO';
+
     return (
         <main className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-10 pb-20">
             <header className="bg-[#1e293b] p-8 md:p-10 rounded-[2.5rem] border border-white/5 shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6">
@@ -115,24 +139,30 @@ export default function AdminResultsPage() {
                 </div>
             </header>
 
-            {/* SECCIÓN DE SUGERENCIAS (SCRAPING) */}
-            <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {suggestions.tica && (
+            {/* 🔥 SECCIÓN DE SUGERENCIAS (SCRAPING) - CORREGIDA */}
+            <section className="grid grid-cols-1 gap-4">
+                {suggestions.waiting ? (
+                    <div className="p-6 bg-amber-500/10 border border-amber-500/20 rounded-3xl text-center">
+                        <p className="text-amber-400 font-black text-sm uppercase">⏳ {suggestions.message}</p>
+                    </div>
+                ) : suggestions.number ? (
                     <div className="p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-3xl flex justify-between items-center group">
                         <div>
-                            <p className="text-emerald-400 font-black text-[10px] uppercase mb-1">🔥 Sugerencia JPS (TICA)</p>
-                            <p className="text-white text-2xl font-black italic">Número detectado: {suggestions.tica}</p>
+                            <p className="text-emerald-400 font-black text-[10px] uppercase mb-1">🔥 Sugerencia para {suggestionType}</p>
+                            <p className="text-white text-2xl font-black italic">Número sugerido: {suggestions.number}</p>
+                            <p className="text-gray-500 text-[8px] mt-1">{suggestions.message}</p>
                         </div>
-                        <button onClick={() => useSuggestion(suggestions.tica!)} className="px-6 py-3 bg-emerald-500 text-white font-black rounded-2xl hover:scale-105 transition-all">USAR</button>
+                        <button 
+                            onClick={useSuggestion} 
+                            className="px-6 py-3 bg-emerald-500 text-white font-black rounded-2xl hover:scale-105 transition-all"
+                        >
+                            USAR
+                        </button>
                     </div>
-                )}
-                {suggestions.nica && (
-                    <div className="p-6 bg-blue-500/10 border border-blue-500/20 rounded-3xl flex justify-between items-center group">
-                        <div>
-                            <p className="text-blue-400 font-black text-[10px] uppercase mb-1">🔥 Sugerencia LOTO (NICA)</p>
-                            <p className="text-white text-2xl font-black italic">Número detectado: {suggestions.nica}</p>
-                        </div>
-                        <button onClick={() => useSuggestion(suggestions.nica!)} className="px-6 py-3 bg-blue-500 text-white font-black rounded-2xl hover:scale-105 transition-all">USAR</button>
+                ) : (
+                    <div className="p-6 bg-gray-500/10 border border-gray-500/20 rounded-3xl text-center">
+                        <p className="text-gray-400 font-black text-sm">🔍 No hay sugerencia disponible para este sorteo</p>
+                        <p className="text-gray-500 text-[8px] mt-1">Los resultados estarán disponibles 2 minutos después del sorteo</p>
                     </div>
                 )}
             </section>
@@ -143,7 +173,11 @@ export default function AdminResultsPage() {
                     <div className="glass-panel p-6 md:p-10 bg-black/20">
                         <div className="flex flex-col md:flex-row gap-4 mb-8">
                             <select 
-                                value={selectedDraw} onChange={(e) => setSelectedDraw(e.target.value)}
+                                value={selectedDraw} 
+                                onChange={(e) => {
+                                    setSelectedDraw(e.target.value);
+                                    setWinningNumber('');
+                                }}
                                 className="flex-1 bg-black/40 border border-white/10 p-5 rounded-2xl text-white font-bold outline-none"
                             >
                                 <option value="">Seleccionar sorteo...</option>
@@ -166,7 +200,7 @@ export default function AdminResultsPage() {
                                 className="text-8xl md:text-[12rem] font-black text-red-500 bg-transparent text-center outline-none leading-none placeholder:text-gray-900"
                             />
                             <button 
-                                onClick={handleProcessDraw} disabled={processing || winningNumber.length !== 2}
+                                onClick={handleProcessDraw} disabled={processing || winningNumber.length !== 2 || !selectedDraw}
                                 className="w-full max-w-md py-6 bg-gradient-to-r from-red-600 to-red-500 rounded-[2rem] text-white font-black text-xl hover:scale-105 transition-all active:scale-95 disabled:opacity-20"
                             >
                                 {processing ? 'PROCESANDO...' : 'LIQUIDAR PREMIOS'}
@@ -185,9 +219,23 @@ export default function AdminResultsPage() {
                                     <p className="text-white font-black text-xs">{d.lottery_type} • {d.draw_time}</p>
                                     <p className="text-[10px] text-gray-500">{new Date(d.draw_date).toLocaleDateString()}</p>
                                 </div>
-                                <button onClick={() => { setResultsDate(new Date(d.draw_date).toLocaleDateString('en-CA')); setSelectedDraw(d.id); }} className="text-[10px] font-black uppercase text-red-400">Liquidar &rarr;</button>
+                                <button 
+                                    onClick={() => { 
+                                        setResultsDate(new Date(d.draw_date).toLocaleDateString('en-CA')); 
+                                        setSelectedDraw(d.id);
+                                        setWinningNumber('');
+                                    }} 
+                                    className="text-[10px] font-black uppercase text-red-400"
+                                >
+                                    Liquidar &rarr;
+                                </button>
                             </div>
                         ))}
+                        {pendingWinnerDraws.length === 0 && (
+                            <div className="p-5 bg-white/5 rounded-2xl text-center">
+                                <p className="text-gray-500 text-xs">No hay sorteos pendientes</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </section>
