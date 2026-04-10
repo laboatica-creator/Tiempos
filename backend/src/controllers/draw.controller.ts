@@ -42,7 +42,8 @@ export const getDraws = async (req: Request, res: Response) => {
             query += ` AND d.draw_date >= $${params.length} AND d.status IN ('OPEN', 'CLOSED')`;
         }
 
-        query += ` ORDER BY d.draw_date DESC, d.draw_time DESC LIMIT 100`;
+        // 🔥 CORREGIDO: ASC para mostrar sorteos más cercanos primero
+        query += ` ORDER BY d.draw_date ASC, d.draw_time ASC LIMIT 100`;
 
         const result = await pool.query(query, params);
         res.json(result.rows);
