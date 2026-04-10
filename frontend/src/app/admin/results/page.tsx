@@ -229,6 +229,11 @@ export default function AdminResultsPage() {
 
     if (!isMounted) return null;
 
+    // Sorteos que ya cerraron pero no tienen número ganador (de cualquier fecha)
+    const pendingWinnerDraws = draws.filter(d => 
+        d.status === 'CLOSED' && !d.winning_number
+    ).sort((a,b) => new Date(a.draw_date).getTime() - new Date(b.draw_date).getTime());
+
     return (
         <main className="p-8 max-w-7xl mx-auto w-full space-y-10 pb-20">
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center bg-[#1e293b] p-10 rounded-[2.5rem] border border-white/5 shadow-2xl gap-8 relative overflow-hidden">
@@ -244,12 +249,41 @@ export default function AdminResultsPage() {
                     >
                         <span>⚡</span> RECARGA / REBAJO
                     </button>
-                    <div className="hidden md:flex flex-col items-end justify-center px-6 border-l border-white/10">
-                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Estado Servidor</p>
-                        <p className="text-emerald-400 font-black text-xs">EN LÍNEA ✓</p>
-                    </div>
                 </div>
             </header>
+
+            {/* SECCIÓN CRÍTICA: SORTEOS PENDIENTES DE CUALQUIER FECHA */}
+            {pendingWinnerDraws.length > 0 && (
+                <section className="bg-red-500/10 border-2 border-dashed border-red-500/30 p-8 rounded-[2.5rem] animate-in slide-in-from-top-4 duration-500">
+                    <div className="flex items-center gap-4 mb-6">
+                         <span className="text-3xl animate-bounce">⚠️</span>
+                         <div>
+                            <h2 className="text-red-400 font-black uppercase text-lg tracking-tighter">Sorteos Pendientes de Resultado</h2>
+                            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Estos sorteos ya cerraron y necesitan un n&uacute;mero ganador urgente</p>
+                         </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {pendingWinnerDraws.map(d => (
+                            <div key={d.id} className="p-4 bg-black/40 rounded-2xl border border-red-500/20 flex justify-between items-center group">
+                                <div>
+                                    <p className="text-white font-black text-xs uppercase">{d.lottery_type} • {d.draw_time}</p>
+                                    <p className="text-gray-500 text-[9px] font-mono">{new Date(d.draw_date).toLocaleDateString()}</p>
+                                </div>
+                                <button 
+                                    onClick={() => {
+                                        setResultsDate(new Date(d.draw_date).toLocaleDateString('en-CA'));
+                                        setSelectedDraw(d.id);
+                                        window.scrollTo({ top: 400, behavior: 'smooth' });
+                                    }}
+                                    className="bg-red-500 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-red-600 transition-all active:scale-90"
+                                >
+                                    Poner Ganador
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
 
             <section className="grid grid-cols-1 lg:grid-cols-12 gap-10">
                 {/* Status Column */}

@@ -1,11 +1,21 @@
 import { Request, Response } from 'express';
-import { pool } from '../index';
+import { pool } from '../database/db';
 import { AuthRequest } from '../middlewares/auth.middleware';
 
+/**
+ * Obtener métodos de pago (Público)
+ * Corregido para mapear campos bank_name -> name y phone_number -> sinpePhone
+ */
 export const getPaymentMethods = async (req: Request, res: Response) => {
     try {
         const methods = await pool.query(`
-            SELECT id, bank_name, phone_number, account_number, type, is_active 
+            SELECT 
+                id, 
+                bank_name as "name", 
+                phone_number as "sinpePhone", 
+                account_number as "account", 
+                type, 
+                is_active 
             FROM payment_methods 
             WHERE is_active = true 
             ORDER BY bank_name ASC
@@ -17,6 +27,9 @@ export const getPaymentMethods = async (req: Request, res: Response) => {
     }
 };
 
+/**
+ * Agregar método de pago (Admin)
+ */
 export const addPaymentMethod = async (req: AuthRequest, res: Response) => {
     try {
         const { bank_name, phone_number, account_number, type } = req.body;
@@ -27,10 +40,13 @@ export const addPaymentMethod = async (req: AuthRequest, res: Response) => {
         res.status(201).json(result.rows[0]);
     } catch (error) {
         console.error('Error adding payment method', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: 'Error interno del servidor' });
     }
 };
 
+/**
+ * Desactivar método de pago (Admin)
+ */
 export const removePaymentMethod = async (req: AuthRequest, res: Response) => {
     try {
         const { id } = req.params;
@@ -38,10 +54,13 @@ export const removePaymentMethod = async (req: AuthRequest, res: Response) => {
         res.json({ message: 'Método de pago desactivado' });
     } catch (error) {
         console.error('Error removing payment method', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: 'Error interno del servidor' });
     }
 };
 
+/**
+ * Obtener tarjetas del usuario
+ */
 export const getCards = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
@@ -53,6 +72,9 @@ export const getCards = async (req: AuthRequest, res: Response) => {
     }
 };
 
+/**
+ * Agregar tarjeta
+ */
 export const addCard = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
@@ -72,6 +94,9 @@ export const addCard = async (req: AuthRequest, res: Response) => {
     }
 };
 
+/**
+ * Eliminar tarjeta
+ */
 export const deleteCard = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
