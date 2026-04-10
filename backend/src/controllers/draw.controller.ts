@@ -42,7 +42,6 @@ export const getDraws = async (req: Request, res: Response) => {
             query += ` AND d.draw_date >= $${params.length} AND d.status IN ('OPEN', 'CLOSED')`;
         }
 
-        // 🔥 CORREGIDO: ASC para mostrar sorteos más cercanos primero
         query += ` ORDER BY d.draw_date ASC, d.draw_time ASC LIMIT 100`;
 
         const result = await pool.query(query, params);
@@ -50,19 +49,6 @@ export const getDraws = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error fetching draws:', error);
         res.status(500).json({ error: 'Internal server error' });
-    }
-};
-
-/**
- * Endpoint para obtener sugerencias de números ganadores (Híbrido)
- */
-export const getDrawSuggestions = async (req: AuthRequest, res: Response) => {
-    try {
-        const suggestions = await ScraperService.getSuggestedResults();
-        res.json(suggestions);
-    } catch (error) {
-        console.error('Error getting suggestions:', error);
-        res.status(500).json({ error: 'Error al obtener sugerencias' });
     }
 };
 
@@ -74,7 +60,6 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Marcar sorteo como finalizado
         const drawRes = await client.query(
             `UPDATE draws SET winning_number = $1, status = 'FINISHED', updated_at = NOW() 
              WHERE id = $2 AND status IN ('OPEN', 'CLOSED') RETURNING *`,
@@ -87,7 +72,6 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
 
         const draw = drawRes.rows[0];
 
-        // 2. Buscar apuestas ganadoras
         const winningBets = await client.query(
             `SELECT bi.*, b.user_id 
              FROM bet_items bi
@@ -96,35 +80,29 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
             [drawId, winning_number]
         );
 
-        // 3. Pagar a ganadores
         for (const item of winningBets.rows) {
             const prize = Number(item.amount) * PAYOUT_MULTIPLIER;
             
-            // Acreditar billetera
             await client.query(
                 `UPDATE wallets SET balance = balance + $1, total_winnings = total_winnings + $1, updated_at = NOW() 
                  WHERE user_id = $2`,
                 [prize, item.user_id]
             );
 
-            // Registrar premio
             await client.query(
                 `INSERT INTO winnings (bet_item_id, user_id, draw_id, amount) VALUES ($1, $2, $3, $4)`,
                 [item.id, item.user_id, drawId, prize]
             );
 
-            // Registrar transacción
             await client.query(
                 `INSERT INTO wallet_transactions (wallet_id, type, amount, description, reference_id) 
                  SELECT id, 'WIN', $1, $2, $3 FROM wallets WHERE user_id = $4`,
                 [prize, `PREMIO: ${draw.lottery_type} ${draw.draw_time} (#${winning_number})`, drawId, item.user_id]
             );
             
-            // Marcar item como ganado
             await client.query(`UPDATE bet_items SET status = 'WON', prize = $1 WHERE id = $2`, [prize, item.id]);
         }
 
-        // 4. Marcar items no ganadores como perdidos
         await client.query(
             `UPDATE bet_items SET status = 'LOST' 
              WHERE bet_id IN (SELECT id FROM bets WHERE draw_id = $1) AND number != $2`,
@@ -152,10 +130,8 @@ export const cancelDraw = async (req: AuthRequest, res: Response) => {
         if (drawRes.rows.length === 0) throw new Error('Draw not found');
         if (drawRes.rows[0].status === 'FINISHED') throw new Error('Cannot cancel a finished draw');
 
-        // 1. Marcar sorteo como cancelado
         await client.query(`UPDATE draws SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1`, [drawId]);
 
-        // 2. Devolver dinero de apuestas ACTIVAS
         const bets = await client.query(`SELECT id, user_id, total_amount, bonus_amount FROM bets WHERE draw_id = $1 AND status = 'ACTIVE'`, [drawId]);
 
         for (const bet of bets.rows) {
@@ -187,33 +163,40 @@ export const cancelDraw = async (req: AuthRequest, res: Response) => {
     }
 };
 
+// 🔥 CORREGIDA: Ahora pasa lottery_type al scraper
 export const getSuggestedResults = async (req: AuthRequest, res: Response) => {
     try {
         const { drawId } = req.query;
-        let drawTime: string | undefined;
-        let drawDate: string | undefined;
         
-        // Si se proporciona un drawId, obtener su hora y fecha para calcular espera
-        if (drawId) {
-            const draw = await pool.query(
-                `SELECT draw_time, draw_date FROM draws WHERE id = $1`,
-                [drawId]
-            );
-            if (draw.rows.length > 0) {
-                drawTime = draw.rows[0].draw_time;
-                drawDate = draw.rows[0].draw_date;
-            }
+        console.log('[SUGGESTIONS] drawId recibido:', drawId);
+        
+        if (!drawId) {
+            return res.json({ number: null, message: 'Se requiere drawId' });
         }
         
-        const suggestions = await ScraperService.getSuggestedResults(drawTime, drawDate);
-        res.json(suggestions);
+        const draw = await pool.query(
+            `SELECT lottery_type, draw_time, draw_date FROM draws WHERE id = $1`,
+            [drawId]
+        );
+        
+        console.log('[SUGGESTIONS] Sorteo encontrado:', draw.rows[0]);
+        
+        if (draw.rows.length === 0) {
+            return res.json({ number: null, message: 'Sorteo no encontrado' });
+        }
+        
+        const { lottery_type, draw_time, draw_date } = draw.rows[0];
+        
+        console.log(`[SUGGESTIONS] Buscando para ${lottery_type} a las ${draw_time} del ${draw_date}`);
+        
+        // 🔥 Pasar lottery_type al scraper
+        const result = await ScraperService.getSuggestedResults(draw_time, draw_date, lottery_type);
+        
+        console.log('[SUGGESTIONS] Resultado del scraper:', result);
+        
+        res.json(result);
     } catch (error) {
-        console.error('Error getting suggestions:', error);
-        res.json({ 
-            tica: null, 
-            nica: null, 
-            waiting: false,
-            message: 'No se pudieron obtener sugerencias' 
-        });
+        console.error('[SUGGESTIONS] Error:', error);
+        res.json({ number: null, message: 'No se pudieron obtener sugerencias' });
     }
 };
