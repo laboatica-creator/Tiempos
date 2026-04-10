@@ -15,6 +15,7 @@ export const createDraw = async (req: AuthRequest, res: Response) => {
         );
         res.status(201).json(result.rows[0]);
     } catch (error) {
+        console.error('Error creating draw:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -46,6 +47,7 @@ export const getDraws = async (req: Request, res: Response) => {
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (error) {
+        console.error('Error fetching draws:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -58,6 +60,7 @@ export const getDrawSuggestions = async (req: AuthRequest, res: Response) => {
         const suggestions = await ScraperService.getSuggestedResults();
         res.json(suggestions);
     } catch (error) {
+        console.error('Error getting suggestions:', error);
         res.status(500).json({ error: 'Error al obtener sugerencias' });
     }
 };
@@ -131,6 +134,7 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
         res.json({ message: 'Número ganador registrado y premios pagados.', winners: winningBets.rows.length });
     } catch (error: any) {
         await client.query('ROLLBACK');
+        console.error('Error setting winning number:', error);
         res.status(500).json({ error: error.message });
     } finally {
         client.release();
@@ -175,18 +179,19 @@ export const cancelDraw = async (req: AuthRequest, res: Response) => {
         res.json({ message: 'Sorteo cancelado y apuestas devueltas.', total_refunded: bets.rows.length });
     } catch (error: any) {
         await client.query('ROLLBACK');
+        console.error('Error cancelling draw:', error);
         res.status(500).json({ error: error.message });
     } finally {
         client.release();
     }
+};
+
 export const getSuggestedResults = async (req: AuthRequest, res: Response) => {
     try {
-        const { ScraperService } = await import('../services/scraper.service');
         const suggestions = await ScraperService.getSuggestedResults();
         res.json(suggestions);
     } catch (error) {
         console.error('Error getting suggestions:', error);
         res.json({ tica: null, nica: null, error: 'No se pudieron obtener sugerencias' });
     }
-};
 };
