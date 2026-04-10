@@ -33,7 +33,7 @@ export default function AdminResultsPage() {
         return () => clearInterval(interval);
     }, []);
 
-    // 🔥 Nuevo: Buscar sugerencias cuando cambia el sorteo seleccionado
+    // Buscar sugerencias cuando cambia el sorteo seleccionado
     useEffect(() => {
         if (selectedDraw) {
             fetchSuggestions();
@@ -95,7 +95,7 @@ export default function AdminResultsPage() {
             return;
         }
         const draw = draws.find(d => d.id === selectedDraw);
-        if (confirm(`¿Confirma el número GANADOR: ${winningNumber} para el sorteo ${draw?.lottery_type}?`)) {
+        if (confirm(`¿Confirma el número GANADOR: ${winningNumber} para el sorteo ${draw?.lottery_type} de las ${draw?.draw_time}?`)) {
             setProcessing(true);
             try {
                 const token = sessionStorage.getItem('token');
@@ -126,9 +126,8 @@ export default function AdminResultsPage() {
         return dDate === resultsDate && (d.status === 'OPEN' || d.status === 'CLOSED');
     });
 
-    // Obtener el tipo de sorteo seleccionado para mostrar en la sugerencia
+    // Obtener el sorteo seleccionado con todos sus datos
     const selectedDrawObj = draws.find(d => d.id === selectedDraw);
-    const suggestionType = selectedDrawObj?.lottery_type || 'SORTEO';
 
     return (
         <main className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-10 pb-20">
@@ -139,30 +138,56 @@ export default function AdminResultsPage() {
                 </div>
             </header>
 
-            {/* 🔥 SECCIÓN DE SUGERENCIAS (SCRAPING) - CORREGIDA */}
+            {/* 🔥 SECCIÓN DE SUGERENCIAS CON INFORMACIÓN COMPLETA DEL SORTEO */}
             <section className="grid grid-cols-1 gap-4">
                 {suggestions.waiting ? (
                     <div className="p-6 bg-amber-500/10 border border-amber-500/20 rounded-3xl text-center">
                         <p className="text-amber-400 font-black text-sm uppercase">⏳ {suggestions.message}</p>
                     </div>
                 ) : suggestions.number ? (
-                    <div className="p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-3xl flex justify-between items-center group">
-                        <div>
-                            <p className="text-emerald-400 font-black text-[10px] uppercase mb-1">🔥 Sugerencia para {suggestionType}</p>
-                            <p className="text-white text-2xl font-black italic">Número sugerido: {suggestions.number}</p>
-                            <p className="text-gray-500 text-[8px] mt-1">{suggestions.message}</p>
+                    <div className="p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-3xl">
+                        <div className="flex justify-between items-start flex-wrap gap-4">
+                            <div className="flex-1">
+                                <div className="flex items-center gap-3 flex-wrap">
+                                    <p className="text-emerald-400 font-black text-[10px] uppercase tracking-widest">
+                                        🔥 SUGERENCIA PARA {selectedDrawObj?.lottery_type || 'SORTEO'}
+                                    </p>
+                                    {selectedDrawObj && (
+                                        <div className="flex gap-3 text-[9px] text-gray-400">
+                                            <span>📅 {new Date(selectedDrawObj.draw_date).toLocaleDateString('es-CR')}</span>
+                                            <span>⏰ {selectedDrawObj.draw_time}</span>
+                                            <span className={selectedDrawObj.status === 'OPEN' ? 'text-green-400' : 'text-yellow-400'}>
+                                                {selectedDrawObj.status === 'OPEN' ? '🟢 ABIERTO' : '🔵 CERRADO'}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                                <p className="text-white text-3xl md:text-4xl font-black italic mt-3">
+                                    Número sugerido: <span className="text-emerald-400">{suggestions.number}</span>
+                                </p>
+                                {suggestions.message && (
+                                    <p className="text-gray-500 text-[9px] mt-2">{suggestions.message}</p>
+                                )}
+                                <div className="mt-3 pt-3 border-t border-emerald-500/20 text-[9px] text-yellow-500/70">
+                                    ⚠️ Verifique que este número corresponda al sorteo de {selectedDrawObj?.lottery_type} a las {selectedDrawObj?.draw_time}
+                                </div>
+                            </div>
+                            <button 
+                                onClick={useSuggestion} 
+                                className="px-6 py-3 bg-emerald-500 text-white font-black rounded-2xl hover:scale-105 transition-all whitespace-nowrap"
+                            >
+                                USAR NÚMERO
+                            </button>
                         </div>
-                        <button 
-                            onClick={useSuggestion} 
-                            className="px-6 py-3 bg-emerald-500 text-white font-black rounded-2xl hover:scale-105 transition-all"
-                        >
-                            USAR
-                        </button>
                     </div>
                 ) : (
                     <div className="p-6 bg-gray-500/10 border border-gray-500/20 rounded-3xl text-center">
                         <p className="text-gray-400 font-black text-sm">🔍 No hay sugerencia disponible para este sorteo</p>
-                        <p className="text-gray-500 text-[8px] mt-1">Los resultados estarán disponibles 2 minutos después del sorteo</p>
+                        <p className="text-gray-500 text-[8px] mt-1">
+                            {selectedDrawObj 
+                                ? `Los resultados para ${selectedDrawObj.lottery_type} a las ${selectedDrawObj.draw_time} estarán disponibles 2 minutos después del sorteo`
+                                : 'Seleccione un sorteo para obtener sugerencias automáticas'}
+                        </p>
                     </div>
                 )}
             </section>
@@ -182,7 +207,9 @@ export default function AdminResultsPage() {
                             >
                                 <option value="">Seleccionar sorteo...</option>
                                 {actionableDraws.map(d => (
-                                    <option key={d.id} value={d.id}>{d.lottery_type} - {d.draw_time} ({new Date(d.draw_date).toLocaleDateString()})</option>
+                                    <option key={d.id} value={d.id}>
+                                        {d.lottery_type} - {d.draw_time} ({new Date(d.draw_date).toLocaleDateString()})
+                                    </option>
                                 ))}
                             </select>
                             <input 

@@ -9,6 +9,7 @@ export class ScraperService {
             'https://www.jps.go.cr/resultados/nuevos-tiempos-reventados'
         ],
         NICA: [
+            'https://nuevaya.com.ni/loto-diaria-de-nicaragua/',  // 🔥 NUEVA URL
             'https://loteriasdenicaragua.com',
             'https://tiemposhoy.com/resultados/nica',
             'https://www.loterianacional.com.ni/resultados'
@@ -88,16 +89,26 @@ export class ScraperService {
                 const pageText = response.data;
                 const $ = cheerio.load(response.data);
                 
-                // Buscar sección que contiene el horario del sorteo
-                let targetSection = '';
+                // 🔥 PATRONES ESPECÍFICOS PARA NICA (incluyendo nuevaya.com.ni)
+                let timePatterns: RegExp[] = [];
                 
-                // Buscar por horario exacto en el texto
-                const timePatterns = [
-                    new RegExp(`(?:${type}|sorteo|resultado)[\\s\\S]{0,100}${timeStr12h}[\\s\\S]{0,200}(\\d{2})`, 'i'),
-                    new RegExp(`(?:${type}|sorteo|resultado)[\\s\\S]{0,100}${timeStr24h}[\\s\\S]{0,200}(\\d{2})`, 'i'),
-                    new RegExp(`${timeStr12h}[\\s\\S]{0,100}(?:ganador|resultado|premio)[\\s\\S]{0,50}(\\d{2})`, 'i'),
-                    new RegExp(`${timeStr24h}[\\s\\S]{0,100}(?:ganador|resultado|premio)[\\s\\S]{0,50}(\\d{2})`, 'i')
-                ];
+                if (type === 'NICA') {
+                    timePatterns = [
+                        new RegExp(`Loto\\s*Diaria[\\s\\S]{0,100}${timeStr12h}[\\s\\S]{0,100}(\\d{2})`, 'i'),
+                        new RegExp(`Loto\\s*Diaria[\\s\\S]{0,100}${timeStr24h}[\\s\\S]{0,100}(\\d{2})`, 'i'),
+                        new RegExp(`(?:NICA|nica|loto|premia2)[\\s\\S]{0,100}${timeStr12h}[\\s\\S]{0,100}(\\d{2})`, 'i'),
+                        new RegExp(`(?:NICA|nica|loto|premia2)[\\s\\S]{0,100}${timeStr24h}[\\s\\S]{0,100}(\\d{2})`, 'i'),
+                        new RegExp(`${timeStr12h}[\\s\\S]{0,100}(?:ganador|resultado|premio)[\\s\\S]{0,50}(\\d{2})`, 'i'),
+                        new RegExp(`${timeStr24h}[\\s\\S]{0,100}(?:ganador|resultado|premio)[\\s\\S]{0,50}(\\d{2})`, 'i')
+                    ];
+                } else {
+                    timePatterns = [
+                        new RegExp(`(?:${type}|sorteo|resultado)[\\s\\S]{0,100}${timeStr12h}[\\s\\S]{0,200}(\\d{2})`, 'i'),
+                        new RegExp(`(?:${type}|sorteo|resultado)[\\s\\S]{0,100}${timeStr24h}[\\s\\S]{0,200}(\\d{2})`, 'i'),
+                        new RegExp(`${timeStr12h}[\\s\\S]{0,100}(?:ganador|resultado|premio)[\\s\\S]{0,50}(\\d{2})`, 'i'),
+                        new RegExp(`${timeStr24h}[\\s\\S]{0,100}(?:ganador|resultado|premio)[\\s\\S]{0,50}(\\d{2})`, 'i')
+                    ];
+                }
                 
                 for (const pattern of timePatterns) {
                     const match = pageText.match(pattern);
@@ -107,33 +118,46 @@ export class ScraperService {
                     }
                 }
                 
-                // Buscar por estructura de tabla que contenga horario y número
-                const rows = $('tr, .row, .sorteo-item, .result-item');
-                for (let i = 0; i < rows.length; i++) {
-                    const rowText = $(rows[i]).text().toLowerCase();
-                    if (rowText.includes(timeStr12h.toLowerCase()) || rowText.includes(timeStr24h)) {
-                        const numbers = $(rows[i]).find('.numero, .number, .ganador, .premio, .resultado').text().trim();
-                        if (numbers && /^\d{2}$/.test(numbers)) {
-                            console.log(`[SCRAPER] ${type} ${drawTime} encontrado en fila: ${numbers}`);
-                            return numbers;
+                // 🔥 Buscar números destacados en la página (específico para nuevaya.com.ni)
+                if (url.includes('nuevaya.com.ni')) {
+                    // Buscar números dentro de elementos .numero, .number, .lottery-number
+                    const numberSelectors = ['.numero', '.number', '.lottery-number', '.premio', '.resultado', '.winning-number'];
+                    for (const selector of numberSelectors) {
+                        const elements = $(selector);
+                        for (let i = 0; i < elements.length; i++) {
+                            const text = $(elements[i]).text().trim();
+                            if (text && /^\d{2}$/.test(text)) {
+                                console.log(`[SCRAPER] NICA ${drawTime} encontrado por selector ${selector}: ${text}`);
+                                return text;
+                            }
                         }
-                        // Buscar cualquier número de 2 dígitos en la fila
-                        const numberMatch = rowText.match(/(\d{2})/);
-                        if (numberMatch && numberMatch[1]) {
-                            console.log(`[SCRAPER] ${type} ${drawTime} encontrado en fila: ${numberMatch[1]}`);
-                            return numberMatch[1];
+                    }
+                    
+                    // Buscar cualquier número de 2 dígitos en el contexto de la página
+                    const numberMatches = pageText.match(/(\d{2})/g);
+                    if (numberMatches && numberMatches.length > 0) {
+                        // Tomar el primer número de 2 dígitos que parezca un resultado
+                        for (const num of numberMatches) {
+                            if (/^\d{2}$/.test(num) && parseInt(num) >= 0 && parseInt(num) <= 99) {
+                                console.log(`[SCRAPER] NICA ${drawTime} encontrado por expresión regular: ${num}`);
+                                return num;
+                            }
                         }
                     }
                 }
                 
-                // Buscar elementos con atributos de tiempo
-                const timeElements = $(`[data-time*="${timeStr24h}"], [data-hora*="${timeStr24h}"], [time*="${timeStr24h}"]`);
-                for (let i = 0; i < timeElements.length; i++) {
-                    const parent = $(timeElements[i]).parent();
-                    const number = parent.find('.numero, .number, .ganador').text().trim();
-                    if (number && /^\d{2}$/.test(number)) {
-                        console.log(`[SCRAPER] ${type} ${drawTime} encontrado por atributo: ${number}`);
-                        return number;
+                // Buscar por estructura de tabla que contenga horario y número
+                const rows = $('tr, .row, .sorteo-item, .result-item, article, .post-content');
+                for (let i = 0; i < rows.length; i++) {
+                    const rowText = $(rows[i]).text().toLowerCase();
+                    if (rowText.includes(timeStr12h.toLowerCase()) || rowText.includes(timeStr24h)) {
+                        const numbers = $(rows[i]).find('.numero, .number, .ganador, .premio, .resultado, span, strong, p').text().trim();
+                        // Buscar cualquier número de 2 dígitos en la fila
+                        const numberMatch = numbers.match(/(\d{2})/);
+                        if (numberMatch && numberMatch[1]) {
+                            console.log(`[SCRAPER] ${type} ${drawTime} encontrado en fila: ${numberMatch[1]}`);
+                            return numberMatch[1];
+                        }
                     }
                 }
                 
@@ -146,11 +170,6 @@ export class ScraperService {
             }
         }
         return null;
-    }
-
-    // Mantener método para compatibilidad con código existente
-    static async getSuggestedResultsLegacy(drawTime?: string, drawDate?: string): Promise<any> {
-        return this.getSuggestedResults(drawTime, drawDate, 'TICA');
     }
 
     static async getResultFromUrl(url: string): Promise<string | null> {
