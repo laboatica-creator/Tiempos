@@ -45,6 +45,24 @@ export const getDraws = async (req: Request, res: Response) => {
 };
 
 /**
+ * Crear un nuevo sorteo manualmente (Admin)
+ */
+export const createDraw = async (req: AuthRequest, res: Response) => {
+  const { lottery_type, draw_date, draw_time, max_exposure_limit, min_bet, max_bet } = req.body;
+  try {
+    const result = await pool.query(
+      `INSERT INTO draws (lottery_type, draw_date, draw_time, status, max_exposure_limit, min_bet, max_bet) 
+       VALUES ($1, $2, $3, 'OPEN', $4, $5, $6) RETURNING *`,
+      [lottery_type, draw_date, draw_time, max_exposure_limit || 50000, min_bet || 100, max_bet || 20000]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error: any) {
+    console.error('Error creating draw:', error);
+    res.status(500).json({ error: 'Error al crear sorteo', details: error.message });
+  }
+};
+
+/**
  * Registrar número ganador y liquidar premios
  */
 export const setWinningNumber = async (req: AuthRequest, res: Response) => {

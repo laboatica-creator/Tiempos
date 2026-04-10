@@ -393,3 +393,18 @@ export const getWinningsHistory = async (req: AuthRequest, res: Response) => {
         res.status(500).json({ error: 'Error fetching winnings' });
     }
 };
+
+// 🔥 FUNCIÓN AGREGADA - Historial de depósitos
+export const getDepositHistory = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const result = await pool.query(
+            `SELECT * FROM sinpe_deposits WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
+            [userId]
+        );
+        res.json(result.rows);
+    } catch (error: any) {
+        console.error('Error fetching deposit history:', error);
+        res.status(500).json({ error: 'Error al obtener historial de depósitos' });
+    }
+};
