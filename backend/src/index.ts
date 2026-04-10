@@ -1,11 +1,9 @@
-import webhookRoutes from './routes/webhook.route';
 import announcementRoutes from './routes/announcement.route';
 import promotionRoutes from './routes/promotion.route';
 import { runMigrations } from './database/migrate';
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { Pool } from 'pg';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { setupCronJobs } from './services/cron.service';
@@ -104,6 +102,7 @@ console.log('   - /api/admin/reports');
 console.log('   - /api/payment-methods');
 console.log('   - /api/announcements');
 console.log('   - /api/admin/promotions');
+console.log('   - /api/webhook');
 console.log('🔧 [8] Rutas cargadas');
 
 // PostgreSQL
@@ -170,4 +169,4 @@ const startServer = async () => {
 
 console.log('🔧 [20] Llamando a startServer()...');
 startServer();
-console.log('🔧 [21] startServer() llamado (continuará asincrónicamente)');" " 
+console.log('🔧 [21] startServer() llamado (continuará asincrónicamente)');
