@@ -2,28 +2,35 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 
 export class ScraperService {
-    // Fuentes oficiales para resultados de loterías
+    // Fuentes específicas para TIEMPOS TICA y TIEMPOS NICA
     private static readonly SOURCES = {
         TICA: [
-            'https://www.jps.go.cr/loteria_nacional/resultados',
+            'https://www.jps.go.cr/loteria_nacional/resultados',  // JPS - Lotería Nacional
+            'https://resultados.tiempos-tica.com',  // Específico Tiempos TICA
             'https://www.nacion.com/gnfactory/resultados-loteria/',
-            'https://resultados.loterias.or.cr/api/latest',
-            'https://www.teletica.com/resultados-loteria'
+            'https://www.teletica.com/resultados-loteria',
+            'https://resultados.loterias.or.cr/api/latest'
         ],
         NICA: [
-            'https://www.loterianacional.com.ni/resultados',
+            'https://www.loterianacional.com.ni/resultados',  // Lotería Nacional Nicaragua
+            'https://resultados.tiempos-nica.com',  // Específico Tiempos NICA
             'https://www.elnuevodiario.com.ni/loteria/',
-            'https://resultados.loterias.ni/api/latest',
-            'https://www.vostv.com.ni/loteria'
+            'https://www.vostv.com.ni/loteria',
+            'https://resultados.loterias.ni/api/latest'
         ]
     };
 
-    // Tiempos de espera después del sorteo (2 minutos)
+    // Palabras clave para identificar resultados de Tiempos
+    private static readonly TIEMPOS_KEYWORDS = {
+        TICA: ['tiempos tica', 'tica tiempos', 'resultados tica', 'sorteo tica', 'tica loteria'],
+        NICA: ['tiempos nica', 'nica tiempos', 'resultados nica', 'sorteo nica', 'nica loteria']
+    };
+
     private static readonly WAIT_AFTER_DRAW_MS = 2 * 60 * 1000; // 2 minutos
 
     static async getSuggestedResults(drawTime?: string, drawDate?: string): Promise<any> {
         try {
-            // Si se proporciona hora del sorteo, calcular si ya pasó el tiempo de espera
+            // Verificar si es momento de buscar (2 minutos después del sorteo)
             if (drawTime && drawDate) {
                 const drawDateTime = new Date(`${drawDate}T${drawTime}`);
                 const now = new Date();
@@ -31,7 +38,7 @@ export class ScraperService {
                 
                 if (timeSinceDraw < this.WAIT_AFTER_DRAW_MS) {
                     const waitSeconds = Math.ceil((this.WAIT_AFTER_DRAW_MS - timeSinceDraw) / 1000);
-                    console.log(`[SCRAPER] El sorteo fue hace ${Math.floor(timeSinceDraw/1000)}s. Esperando ${waitSeconds}s para buscar resultados...`);
+                    console.log(`[SCRAPER] Sorteo hace ${Math.floor(timeSinceDraw/1000)}s. Esperando ${waitSeconds}s...`);
                     return {
                         tica: null,
                         nica: null,
@@ -42,147 +49,175 @@ export class ScraperService {
                 }
             }
             
-            console.log('[SCRAPER] Buscando resultados oficiales...');
+            console.log('[SCRAPER] Buscando resultados oficiales de TIEMPOS TICA y TIEMPOS NICA...');
             
-            // Buscar resultado TICA y NICA en paralelo con reintentos
+            // Buscar resultados específicos de Tiempos
             const [ticaNumber, nicaNumber] = await Promise.all([
-                this.scrapeWithRetry('TICA', 3),
-                this.scrapeWithRetry('NICA', 3)
+                this.scrapeTiemposTica(),
+                this.scrapeTiemposNica()
             ]);
             
-            // Determinar veracidad
-            const ticaConfidence = ticaNumber ? await this.verifyResult('TICA', ticaNumber) : 0;
-            const nicaConfidence = nicaNumber ? await this.verifyResult('NICA', nicaNumber) : 0;
+            // Verificar confianza
+            const ticaConfidence = ticaNumber ? await this.verifyTiemposResult('TICA', ticaNumber) : 0;
+            const nicaConfidence = nicaNumber ? await this.verifyTiemposResult('NICA', nicaNumber) : 0;
             
-            const ticaValid = ticaConfidence >= 2; // Al menos 2 fuentes coinciden
-            const nicaValid = nicaConfidence >= 2;
+            const ticaValid = ticaConfidence >= 1;
+            const nicaValid = nicaConfidence >= 1;
             
             if (!ticaNumber && !nicaNumber) {
                 return {
                     tica: null,
                     nica: null,
                     waiting: false,
-                    message: 'No se encontraron resultados en ninguna fuente. Verifique manualmente.'
+                    message: 'No se encontraron resultados. Verifique manualmente en la página oficial.'
                 };
             }
             
             return {
                 tica: ticaNumber,
                 nica: nicaNumber,
-                ticaConfidence: ticaConfidence,
-                nicaConfidence: nicaConfidence,
+                ticaConfidence,
+                nicaConfidence,
                 ticaValid,
                 nicaValid,
                 waiting: false,
-                message: ticaValid && nicaValid 
-                    ? '✅ Resultados verificados con alta confianza' 
-                    : '⚠️ Resultados con baja confianza. Verifique manualmente.',
+                message: this.getConfidenceMessage(ticaValid, nicaValid),
                 timestamp: new Date().toISOString()
             };
         } catch (error) {
-            console.error('[SCRAPER] Error general:', error);
+            console.error('[SCRAPER] Error:', error);
             return {
                 tica: null,
                 nica: null,
                 waiting: false,
-                message: 'Error en el sistema de scraping',
-                source: 'error'
+                message: 'Error en el sistema de búsqueda de resultados'
             };
         }
     }
 
-    private static async scrapeWithRetry(type: 'TICA' | 'NICA', maxRetries: number = 3): Promise<string | null> {
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            console.log(`[SCRAPER] Buscando ${type} - Intento ${attempt}/${maxRetries}`);
-            
-            for (const url of this.SOURCES[type]) {
-                try {
-                    const result = await this.scrapeUrl(url, type);
-                    if (result) {
-                        console.log(`[SCRAPER] ${type} encontrado: ${result} en ${url}`);
-                        return result;
-                    }
-                } catch (error) {
-                    console.error(`[SCRAPER] Error en ${url}:`, error);
-                }
-            }
-            
-            if (attempt < maxRetries) {
-                // Esperar 5 segundos antes de reintentar
-                await new Promise(resolve => setTimeout(resolve, 5000));
-            }
-        }
-        return null;
-    }
-
-    private static async scrapeUrl(url: string, type: 'TICA' | 'NICA'): Promise<string | null> {
-        const response = await axios.get(url, { 
-            timeout: 15000,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-            }
-        });
-        
-        const $ = cheerio.load(response.data);
-        const pageText = response.data;
-        
-        // Array de patrones de búsqueda para números ganadores
-        const patterns = [
-            /ganador[:\s]*(\d{2})/i,
-            /n[uú]mero\s*ganador[:\s]*(\d{2})/i,
-            /resultado[:\s]*(\d{2})/i,
-            /premio\s*mayor[:\s]*(\d{2})/i,
-            /"numero":\s*"(\d{2})"/i,
-            /'numero':\s*'(\d{2})'/i,
-            /winning\s*number[:\s]*(\d{2})/i,
-            /lottery\s*result[:\s]*(\d{2})/i,
-            /sorteo\s*(\d{2})/i
-        ];
-        
-        // Buscar por patrones
-        for (const pattern of patterns) {
-            const match = pageText.match(pattern);
-            if (match && match[1] && /^\d{2}$/.test(match[1])) {
-                return match[1];
-            }
-        }
-        
-        // Buscar por selectores CSS comunes
-        const selectors = [
-            '.numero-ganador', '.resultado', '.winning-number', 
-            '.premio-mayor', '.lottery-number', '.result-number',
-            '[data-winning-number]', '.ganador', '.draw-result'
-        ];
-        
-        for (const selector of selectors) {
-            const element = $(selector).first();
-            let text = element.text().trim();
-            if (text && /^\d{2}$/.test(text)) {
-                return text;
-            }
-            const attrValue = element.attr('data-number') || element.attr('data-value');
-            if (attrValue && /^\d{2}$/.test(attrValue)) {
-                return attrValue;
-            }
-        }
-        
-        // Buscar números en contexto de lotería específico
-        const lotteryContext = pageText.match(new RegExp(`(${type}|loter[ií]a|sorteo|draw)[\\s\\S]{0,200}(\\d{2})`, 'i'));
-        if (lotteryContext && lotteryContext[2] && /^\d{2}$/.test(lotteryContext[2])) {
-            return lotteryContext[2];
-        }
-        
-        return null;
-    }
-
-    private static async verifyResult(type: 'TICA' | 'NICA', number: string): Promise<number> {
-        let confidence = 0;
-        
-        for (const url of this.SOURCES[type]) {
+    private static async scrapeTiemposTica(): Promise<string | null> {
+        for (const url of this.SOURCES.TICA) {
             try {
-                const result = await this.scrapeUrl(url, type);
-                if (result === number) {
+                console.log(`[SCRAPER] Buscando TIEMPOS TICA en: ${url}`);
+                const response = await axios.get(url, { 
+                    timeout: 15000,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    }
+                });
+                
+                const pageText = response.data.toLowerCase();
+                const $ = cheerio.load(response.data);
+                
+                // Verificar si la página contiene resultados de Tiempos TICA
+                const hasTiemposContent = this.TIEMPOS_KEYWORDS.TICA.some(keyword => 
+                    pageText.includes(keyword.toLowerCase())
+                );
+                
+                if (!hasTiemposContent && !url.includes('jps')) {
+                    console.log(`[SCRAPER] ${url} no contiene resultados de Tiempos TICA`);
+                    continue;
+                }
+                
+                // Patrones específicos para números ganadores (2 dígitos)
+                const patterns = [
+                    /(?:resultado|ganador|numero|número|premio)\s*(?:mayor|principal)?\s*[:\s]*(\d{2})/i,
+                    /"numero":\s*"(\d{2})"/i,
+                    /'numero':\s*'(\d{2})'/i,
+                    /<span[^>]*class="[^"]*winning[^"]*"[^>]*>(\d{2})<\/span>/i,
+                    /<div[^>]*class="[^"]*result[^"]*"[^>]*>(\d{2})<\/div>/i,
+                    /(\d{2})\s*(?:es\s*el\s*ganador|resultado\s*del\s*sorteo)/i
+                ];
+                
+                for (const pattern of patterns) {
+                    const match = response.data.match(pattern);
+                    if (match && match[1] && /^\d{2}$/.test(match[1])) {
+                        console.log(`[SCRAPER] TIEMPOS TICA encontrado: ${match[1]} en ${url}`);
+                        return match[1];
+                    }
+                }
+                
+                // Buscar números destacados en la página
+                const numberElements = $('.numero, .number, .ganador, .winner, .resultado, .premio').first();
+                let text = numberElements.text().trim();
+                if (text && /^\d{2}$/.test(text)) {
+                    console.log(`[SCRAPER] TIEMPOS TICA por selector: ${text}`);
+                    return text;
+                }
+                
+            } catch (error) {
+                console.error(`[SCRAPER] Error en ${url}:`, error);
+            }
+        }
+        return null;
+    }
+
+    private static async scrapeTiemposNica(): Promise<string | null> {
+        for (const url of this.SOURCES.NICA) {
+            try {
+                console.log(`[SCRAPER] Buscando TIEMPOS NICA en: ${url}`);
+                const response = await axios.get(url, { 
+                    timeout: 15000,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    }
+                });
+                
+                const pageText = response.data.toLowerCase();
+                const $ = cheerio.load(response.data);
+                
+                // Verificar si la página contiene resultados de Tiempos NICA
+                const hasTiemposContent = this.TIEMPOS_KEYWORDS.NICA.some(keyword => 
+                    pageText.includes(keyword.toLowerCase())
+                );
+                
+                if (!hasTiemposContent && !url.includes('loterianacional')) {
+                    console.log(`[SCRAPER] ${url} no contiene resultados de Tiempos NICA`);
+                    continue;
+                }
+                
+                // Patrones específicos para números ganadores
+                const patterns = [
+                    /(?:resultado|ganador|numero|número|premio)\s*(?:mayor|principal)?\s*[:\s]*(\d{2})/i,
+                    /"numero":\s*"(\d{2})"/i,
+                    /'numero':\s*'(\d{2})'/i,
+                    /<span[^>]*class="[^"]*winning[^"]*"[^>]*>(\d{2})<\/span>/i,
+                    /<div[^>]*class="[^"]*result[^"]*"[^>]*>(\d{2})<\/div>/i,
+                    /(\d{2})\s*(?:es\s*el\s*ganador|resultado\s*del\s*sorteo)/i
+                ];
+                
+                for (const pattern of patterns) {
+                    const match = response.data.match(pattern);
+                    if (match && match[1] && /^\d{2}$/.test(match[1])) {
+                        console.log(`[SCRAPER] TIEMPOS NICA encontrado: ${match[1]} en ${url}`);
+                        return match[1];
+                    }
+                }
+                
+                // Buscar números destacados
+                const numberElements = $('.numero, .number, .ganador, .winner, .resultado, .premio').first();
+                let text = numberElements.text().trim();
+                if (text && /^\d{2}$/.test(text)) {
+                    console.log(`[SCRAPER] TIEMPOS NICA por selector: ${text}`);
+                    return text;
+                }
+                
+            } catch (error) {
+                console.error(`[SCRAPER] Error en ${url}:`, error);
+            }
+        }
+        return null;
+    }
+
+    private static async verifyTiemposResult(type: 'TICA' | 'NICA', number: string): Promise<number> {
+        let confidence = 0;
+        const sources = this.SOURCES[type];
+        
+        for (const url of sources) {
+            try {
+                const response = await axios.get(url, { timeout: 10000 });
+                const match = response.data.match(new RegExp(`(?:resultado|ganador|numero|número).{0,50}${number}`, 'i'));
+                if (match) {
                     confidence++;
                 }
             } catch (error) {
@@ -190,13 +225,26 @@ export class ScraperService {
             }
         }
         
-        console.log(`[SCRAPER] ${type} - Número ${number} tiene confianza ${confidence}/${this.SOURCES[type].length}`);
+        console.log(`[SCRAPER] TIEMPOS ${type} - Número ${number} encontrado en ${confidence}/${sources.length} fuentes`);
         return confidence;
+    }
+
+    private static getConfidenceMessage(ticaValid: boolean, nicaValid: boolean): string {
+        if (ticaValid && nicaValid) {
+            return '✅ Resultados de TIEMPOS TICA y TIEMPOS NICA verificados';
+        } else if (ticaValid) {
+            return '⚠️ Solo se encontró resultado de TIEMPOS TICA. Verifique NICA manualmente.';
+        } else if (nicaValid) {
+            return '⚠️ Solo se encontró resultado de TIEMPOS NICA. Verifique TICA manualmente.';
+        }
+        return '⚠️ No se encontraron resultados oficiales. Verifique manualmente.';
     }
 
     static async getResultFromUrl(url: string): Promise<string | null> {
         try {
-            return await this.scrapeUrl(url, 'TICA');
+            const response = await axios.get(url, { timeout: 10000 });
+            const match = response.data.match(/(?:resultado|ganador|numero|número).{0,50}(\d{2})/i);
+            return match && match[1] && /^\d{2}$/.test(match[1]) ? match[1] : null;
         } catch (error) {
             console.error('Error scraping URL:', error);
             return null;
