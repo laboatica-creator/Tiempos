@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createDraw, setWinningNumber, getDraws, cancelDraw } from '../controllers/draw.controller';
+import { createDraw, setWinningNumber, getDraws, cancelDraw, getDrawSuggestions } from '../controllers/draw.controller';
 import { authenticateJWT, requirePermission } from '../middlewares/auth.middleware';
 
 const router = Router();
@@ -8,6 +8,7 @@ const router = Router();
 router.get('/', authenticateJWT, getDraws);
 
 // Admin-only routes
+router.get('/suggestions', authenticateJWT, requirePermission('draws'), getDrawSuggestions);
 router.post('/create', authenticateJWT, requirePermission('draws'), createDraw);
 router.post('/:drawId/win', authenticateJWT, requirePermission('draws'), setWinningNumber);
 router.post('/:drawId/cancel', authenticateJWT, requirePermission('draws'), cancelDraw);

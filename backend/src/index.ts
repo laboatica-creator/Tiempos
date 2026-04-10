@@ -74,8 +74,10 @@ import adminRoutes from './routes/admin.route';
 import adminReportsRoutes from './routes/admin.reports.route';
 import userRoutes from './routes/user.route';
 import paymentRoutes from './routes/payment.route';
+import webhookRoutes from './routes/webhook.route';
 
 // 🔥 REGISTRAR RUTAS
+app.use('/api/webhook', webhookRoutes);
 app.use('/api/payment-methods', paymentRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/wallet', walletRoutes);
