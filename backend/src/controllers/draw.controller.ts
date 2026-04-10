@@ -189,10 +189,31 @@ export const cancelDraw = async (req: AuthRequest, res: Response) => {
 
 export const getSuggestedResults = async (req: AuthRequest, res: Response) => {
     try {
-        const suggestions = await ScraperService.getSuggestedResults();
+        const { drawId } = req.query;
+        let drawTime: string | undefined;
+        let drawDate: string | undefined;
+        
+        // Si se proporciona un drawId, obtener su hora y fecha para calcular espera
+        if (drawId) {
+            const draw = await pool.query(
+                `SELECT draw_time, draw_date FROM draws WHERE id = $1`,
+                [drawId]
+            );
+            if (draw.rows.length > 0) {
+                drawTime = draw.rows[0].draw_time;
+                drawDate = draw.rows[0].draw_date;
+            }
+        }
+        
+        const suggestions = await ScraperService.getSuggestedResults(drawTime, drawDate);
         res.json(suggestions);
     } catch (error) {
         console.error('Error getting suggestions:', error);
-        res.json({ tica: null, nica: null, error: 'No se pudieron obtener sugerencias' });
+        res.json({ 
+            tica: null, 
+            nica: null, 
+            waiting: false,
+            message: 'No se pudieron obtener sugerencias' 
+        });
     }
 };
