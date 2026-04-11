@@ -13,7 +13,7 @@ interface Draw {
 }
 
 export default function BettingPage() {
-    const [draws, setDraws] = useState<Draw[]>([]);
+    const [allDraws, setAllDraws] = useState<Draw[]>([]);
     const [selectedLottery, setSelectedLottery] = useState<'TICA' | 'NICA'>('TICA');
     const [selectedDraw, setSelectedDraw] = useState<string>('');
     const [numbers, setNumbers] = useState<{ number: string; amount: number }[]>([]);
@@ -21,6 +21,7 @@ export default function BettingPage() {
     const [submitting, setSubmitting] = useState(false);
     const [currentTime, setCurrentTime] = useState('');
 
+    // Cargar todos los sorteos al iniciar
     useEffect(() => {
         fetchDraws();
         const interval = setInterval(() => {
@@ -29,12 +30,25 @@ export default function BettingPage() {
         return () => clearInterval(interval);
     }, []);
 
+    // Cuando cambia la lotería seleccionada, actualizar el sorteo seleccionado
+    useEffect(() => {
+        const drawsForLottery = allDraws.filter(d => d.lottery_type === selectedLottery);
+        if (drawsForLottery.length > 0) {
+            setSelectedDraw(drawsForLottery[0].id);
+        } else {
+            setSelectedDraw('');
+        }
+    }, [selectedLottery, allDraws]);
+
     const fetchDraws = async () => {
         try {
+            setLoading(true);
             const token = sessionStorage.getItem('token');
             const data = await api.get('/draws', token);
             if (Array.isArray(data)) {
-                setDraws(data.filter((d: Draw) => d.status === 'OPEN'));
+                // Filtrar solo sorteos OPEN
+                const openDraws = data.filter((d: Draw) => d.status === 'OPEN');
+                setAllDraws(openDraws);
             }
         } catch (err) {
             console.error('Error fetching draws:', err);
@@ -42,14 +56,6 @@ export default function BettingPage() {
             setLoading(false);
         }
     };
-
-    const filteredDraws = draws.filter(d => d.lottery_type === selectedLottery);
-
-    useEffect(() => {
-        if (filteredDraws.length > 0 && !selectedDraw) {
-            setSelectedDraw(filteredDraws[0].id);
-        }
-    }, [filteredDraws, selectedDraw]);
 
     const handleAddNumber = () => {
         if (numbers.length >= 10) {
@@ -116,7 +122,9 @@ export default function BettingPage() {
         }
     };
 
-    const selectedDrawObj = draws.find(d => d.id === selectedDraw);
+    // Obtener los sorteos filtrados por la lotería seleccionada
+    const filteredDraws = allDraws.filter(d => d.lottery_type === selectedLottery);
+    const selectedDrawObj = allDraws.find(d => d.id === selectedDraw);
 
     if (loading) {
         return (
@@ -160,9 +168,17 @@ export default function BettingPage() {
                     </button>
                 </div>
 
+                {/* Mostrar cantidad de sorteos encontrados */}
+                <div className="text-center mb-4">
+                    <p className="text-gray-500 text-xs">
+                        {filteredDraws.length} {filteredDraws.length === 1 ? 'sorteo disponible' : 'sorteos disponibles'} de {selectedLottery}
+                    </p>
+                </div>
+
                 {filteredDraws.length === 0 ? (
                     <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
                         <p className="text-gray-400">No hay sorteos abiertos de {selectedLottery}</p>
+                        <p className="text-gray-500 text-xs mt-2">Los sorteos se generan automáticamente</p>
                     </div>
                 ) : (
                     <>
