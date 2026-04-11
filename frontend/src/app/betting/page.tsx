@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
-import { formatDrawDate, formatDrawDateTime, getCurrentCostaRicaDate } from '../../lib/dateUtils';
+import { formatDrawDate, formatDrawDateTime, getCurrentCostaRicaTime } from '../../lib/dateUtils';
 
 interface Draw {
     id: string;
@@ -28,10 +28,8 @@ export default function BettingPage() {
         setIsMounted(true);
         fetchDraws();
         
-        // Actualizar hora actual cada segundo
         const interval = setInterval(() => {
-            const now = new Date();
-            setCurrentTime(now.toLocaleTimeString('es-CR', { timeZone: 'America/Costa_Rica' }));
+            setCurrentTime(getCurrentCostaRicaTime());
         }, 1000);
         
         return () => clearInterval(interval);
@@ -43,14 +41,14 @@ export default function BettingPage() {
             const data = await api.get('/draws', token);
             if (Array.isArray(data)) {
                 setDraws(data);
-                const openDraws = data.filter(d => d.status === 'OPEN');
+                const openDraws = data.filter((d: Draw) => d.status === 'OPEN');
                 if (openDraws.length > 0) {
                     setSelectedDraw(openDraws[0].id);
                     setSelectedLottery(openDraws[0].lottery_type);
                 }
             }
         } catch (err) {
-            console.error(err);
+            console.error('Error fetching draws:', err);
         } finally {
             setLoading(false);
         }
@@ -114,6 +112,7 @@ export default function BettingPage() {
                 fetchDraws();
             }
         } catch (err) {
+            console.error('Error placing bet:', err);
             alert('Error al realizar la apuesta');
         } finally {
             setSubmitting(false);
@@ -138,9 +137,9 @@ export default function BettingPage() {
         <main className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-4 pb-32">
             <div className="max-w-2xl mx-auto">
                 <div className="text-center mb-6">
-                    <h1 className="text-3xl font-black text-white uppercase italic">Apostar</h1>
+                    <h1 className="text-3xl font-black text-white uppercase italic">🎲 Apostar</h1>
                     <p className="text-emerald-400 text-xs uppercase tracking-widest mt-1">
-                        Hora actual: {currentTime}
+                        Hora Costa Rica: {currentTime}
                     </p>
                 </div>
 
