@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
-import { formatTransactionDate } from '../../lib/dateUtils';
+import { formatTransactionDate, getCurrentCostaRicaDate } from '../../lib/dateUtils';
 
 type TabType = 'recharge' | 'withdraw' | 'history';
 
@@ -18,11 +18,22 @@ export default function WalletPage() {
     const [withdrawDetails, setWithdrawDetails] = useState('');
     const [loading, setLoading] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
+    
+    // 🔥 Filtros para historial
+    const [startDate, setStartDate] = useState(getCurrentCostaRicaDate());
+    const [endDate, setEndDate] = useState(getCurrentCostaRicaDate());
+    const [filterType, setFilterType] = useState('ALL');
+    const [filteredTransactions, setFilteredTransactions] = useState<any[]>([]);
 
     useEffect(() => {
         setIsMounted(true);
         fetchWalletData();
     }, []);
+
+    // 🔥 Filtrar transacciones cuando cambian los filtros
+    useEffect(() => {
+        filterTransactions();
+    }, [transactions, startDate, endDate, filterType]);
 
     const fetchWalletData = async () => {
         const token = sessionStorage.getItem('token');
@@ -47,6 +58,33 @@ export default function WalletPage() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const filterTransactions = () => {
+        let filtered = [...transactions];
+        
+        // Filtrar por rango de fechas
+        if (startDate && endDate) {
+            filtered = filtered.filter(tx => {
+                const txDate = tx.created_at.split('T')[0];
+                return txDate >= startDate && txDate <= endDate;
+            });
+        }
+        
+        // Filtrar por tipo
+        if (filterType !== 'ALL') {
+            filtered = filtered.filter(tx => {
+                if (filterType === 'DEPOSIT') return tx.type === 'DEPÓSITO SINPE' || tx.type === 'DEPÓSITO';
+                if (filterType === 'WITHDRAW') return tx.type === 'RETIRO';
+                if (filterType === 'BET') return tx.type === 'BET';
+                if (filterType === 'WIN') return tx.type === 'WIN';
+                if (filterType === 'REFUND') return tx.type === 'REFUND';
+                if (filterType === 'BONUS') return tx.type === 'BONUS';
+                return true;
+            });
+        }
+        
+        setFilteredTransactions(filtered);
     };
 
     const handleSinpeDeposit = async (e: React.FormEvent) => {
@@ -275,29 +313,72 @@ export default function WalletPage() {
                 </div>
             )}
 
-            {/* Panel de Historial */}
+            {/* Panel de Historial con filtros */}
             {activeTab === 'history' && (
                 <div className="mx-4 mt-6 bg-white/5 rounded-2xl p-5 border border-white/10 mb-6">
                     <h2 className="text-white font-black text-lg mb-4">📋 Historial de Transacciones</h2>
+                    
+                    {/* 🔥 Filtros de fecha y tipo */}
+                    <div className="mb-4 space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-gray-400 text-[9px] font-black uppercase block mb-1">Desde</label>
+                                <input 
+                                    type="date" 
+                                    value={startDate} 
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    className="w-full bg-gray-800 border border-white/10 p-2 rounded-lg text-white text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-gray-400 text-[9px] font-black uppercase block mb-1">Hasta</label>
+                                <input 
+                                    type="date" 
+                                    value={endDate} 
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    className="w-full bg-gray-800 border border-white/10 p-2 rounded-lg text-white text-sm"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-gray-400 text-[9px] font-black uppercase block mb-1">Tipo de transacción</label>
+                            <select 
+                                value={filterType} 
+                                onChange={(e) => setFilterType(e.target.value)}
+                                className="w-full bg-gray-800 border border-white/10 p-2 rounded-lg text-white text-sm"
+                            >
+                                <option value="ALL">Todos</option>
+                                <option value="DEPOSIT">Depósitos</option>
+                                <option value="WITHDRAW">Retiros</option>
+                                <option value="BET">Apuestas</option>
+                                <option value="WIN">Premios</option>
+                                <option value="REFUND">Reembolsos</option>
+                                <option value="BONUS">Bonos</option>
+                            </select>
+                        </div>
+                    </div>
+                    
                     {loading ? (
                         <div className="flex justify-center py-10">
                             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500"></div>
                         </div>
-                    ) : transactions.length === 0 ? (
+                    ) : filteredTransactions.length === 0 ? (
                         <div className="text-center py-10">
-                            <p className="text-gray-500">No hay transacciones registradas</p>
+                            <p className="text-gray-500">No hay transacciones para los filtros seleccionados</p>
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {transactions.map((tx, idx) => (
+                            {filteredTransactions.map((tx, idx) => (
                                 <div key={idx} className="bg-gray-800/50 rounded-xl p-4">
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <p className={`text-xs font-black uppercase ${
-                                                tx.type === 'DEPÓSITO' ? 'text-emerald-400' : 
-                                                tx.type === 'RETIRO' ? 'text-orange-400' : 'text-blue-400'
+                                                tx.type === 'DEPÓSITO' || tx.type === 'DEPÓSITO SINPE' ? 'text-emerald-400' : 
+                                                tx.type === 'RETIRO' ? 'text-orange-400' : 
+                                                tx.type === 'BONUS' ? 'text-yellow-400' :
+                                                tx.type === 'WIN' ? 'text-green-400' : 'text-blue-400'
                                             }`}>
-                                                {tx.type}
+                                                {tx.type === 'DEPÓSITO SINPE' ? 'DEPÓSITO' : tx.type}
                                             </p>
                                             <p className="text-gray-400 text-[10px] mt-1">
                                                 {formatTransactionDate(tx.created_at)}
@@ -308,14 +389,19 @@ export default function WalletPage() {
                                         </div>
                                         <div className="text-right">
                                             <p className={`font-black text-base ${
-                                                tx.type === 'DEPÓSITO' || tx.type === 'WIN' ? 'text-emerald-400' : 'text-red-400'
+                                                tx.type === 'DEPÓSITO' || tx.type === 'DEPÓSITO SINPE' || tx.type === 'WIN' ? 'text-emerald-400' : 
+                                                tx.type === 'BONUS' ? 'text-yellow-400' : 'text-red-400'
                                             }`}>
-                                                {tx.type === 'DEPÓSITO' || tx.type === 'WIN' ? '+' : '-'}₡{Number(tx.amount).toLocaleString()}
+                                                {tx.type === 'DEPÓSITO' || tx.type === 'DEPÓSITO SINPE' || tx.type === 'WIN' || tx.type === 'BONUS' ? '+' : '-'}
+                                                ₡{Number(tx.amount).toLocaleString()}
                                             </p>
                                             <p className={`text-[8px] font-black uppercase mt-1 ${
-                                                tx.status === 'COMPLETED' || tx.status === 'APPROVED' ? 'text-green-500' : 'text-yellow-500'
+                                                tx.status === 'COMPLETED' || tx.status === 'APPROVED' ? 'text-green-500' : 
+                                                tx.status === 'PENDING' ? 'text-yellow-500' : 'text-red-500'
                                             }`}>
-                                                {tx.status === 'PENDING' ? 'Pendiente' : tx.status}
+                                                {tx.status === 'PENDING' ? 'Pendiente' : 
+                                                 tx.status === 'COMPLETED' ? 'Completado' :
+                                                 tx.status === 'APPROVED' ? 'Aprobado' : tx.status}
                                             </p>
                                         </div>
                                     </div>
