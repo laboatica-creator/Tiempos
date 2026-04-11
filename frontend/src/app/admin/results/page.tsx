@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../../lib/api';
+import { formatDrawDate, formatDrawDateTime, getCurrentCostaRicaDate } from '../../../lib/dateUtils';
 
 interface Draw {
     id: string;
@@ -20,7 +21,7 @@ export default function AdminResultsPage() {
     const [processing, setProcessing] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
     const [countdown, setCountdown] = useState('--:--:--');
-    const [resultsDate, setResultsDate] = useState(new Date().toLocaleDateString('en-CA'));
+    const [resultsDate, setResultsDate] = useState(getCurrentCostaRicaDate());
     const [suggestions, setSuggestions] = useState<{ number: string | null, waiting: boolean, message: string }>({ number: null, waiting: false, message: '' });
     const drawsRef = useRef<Draw[]>([]);
 
@@ -33,7 +34,6 @@ export default function AdminResultsPage() {
         return () => clearInterval(interval);
     }, []);
 
-    // Buscar sugerencias cuando cambia el sorteo seleccionado
     useEffect(() => {
         if (selectedDraw) {
             fetchSuggestions();
@@ -57,10 +57,7 @@ export default function AdminResultsPage() {
             const token = sessionStorage.getItem('token');
             if (!selectedDraw) return;
             
-            console.log('[FRONTEND] Buscando sugerencias para drawId:', selectedDraw);
             const data = await api.get(`/draws/suggestions?drawId=${selectedDraw}`, token);
-            console.log('[FRONTEND] Sugerencias recibidas:', data);
-            
             if (data && !data.error) {
                 setSuggestions({
                     number: data.number || null,
@@ -122,11 +119,10 @@ export default function AdminResultsPage() {
 
     const pendingWinnerDraws = draws.filter(d => d.status === 'CLOSED' && !d.winning_number);
     const actionableDraws = draws.filter(d => {
-        const dDate = new Date(d.draw_date).toLocaleDateString('en-CA');
+        const dDate = formatDrawDate(d.draw_date);
         return dDate === resultsDate && (d.status === 'OPEN' || d.status === 'CLOSED');
     });
 
-    // Obtener el sorteo seleccionado con todos sus datos
     const selectedDrawObj = draws.find(d => d.id === selectedDraw);
 
     return (
@@ -134,11 +130,11 @@ export default function AdminResultsPage() {
             <header className="bg-[#1e293b] p-8 md:p-10 rounded-[2.5rem] border border-white/5 shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6">
                 <div>
                     <h1 className="text-4xl md:text-5xl font-black text-white uppercase italic tracking-tighter">Resultados</h1>
-                    <p className="text-emerald-400 font-bold uppercase text-[10px] tracking-[0.4em]">Liquidaci&oacute;n de Sorteos</p>
+                    <p className="text-emerald-400 font-bold uppercase text-[10px] tracking-[0.4em]">Liquidación de Sorteos</p>
                 </div>
             </header>
 
-            {/* 🔥 SECCIÓN DE SUGERENCIAS CON INFORMACIÓN COMPLETA DEL SORTEO */}
+            {/* SECCIÓN DE SUGERENCIAS */}
             <section className="grid grid-cols-1 gap-4">
                 {suggestions.waiting ? (
                     <div className="p-6 bg-amber-500/10 border border-amber-500/20 rounded-3xl text-center">
@@ -148,52 +144,35 @@ export default function AdminResultsPage() {
                     <div className="p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-3xl">
                         <div className="flex justify-between items-start flex-wrap gap-4">
                             <div className="flex-1">
-                                <div className="flex items-center gap-3 flex-wrap">
-                                    <p className="text-emerald-400 font-black text-[10px] uppercase tracking-widest">
-                                        🔥 SUGERENCIA PARA {selectedDrawObj?.lottery_type || 'SORTEO'}
-                                    </p>
-                                    {selectedDrawObj && (
-                                        <div className="flex gap-3 text-[9px] text-gray-400">
-                                            <span>📅 {new Date(selectedDrawObj.draw_date).toLocaleDateString('es-CR')}</span>
-                                            <span>⏰ {selectedDrawObj.draw_time}</span>
-                                            <span className={selectedDrawObj.status === 'OPEN' ? 'text-green-400' : 'text-yellow-400'}>
-                                                {selectedDrawObj.status === 'OPEN' ? '🟢 ABIERTO' : '🔵 CERRADO'}
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-                                <p className="text-white text-3xl md:text-4xl font-black italic mt-3">
+                                <p className="text-emerald-400 font-black text-[10px] uppercase mb-1">
+                                    🔥 Sugerencia para {selectedDrawObj?.lottery_type || 'SORTEO'}
+                                </p>
+                                {selectedDrawObj && (
+                                    <div className="flex gap-3 text-[9px] text-gray-400 mb-2">
+                                        <span>📅 {formatDrawDate(selectedDrawObj.draw_date)}</span>
+                                        <span>⏰ {selectedDrawObj.draw_time}</span>
+                                    </div>
+                                )}
+                                <p className="text-white text-3xl md:text-4xl font-black italic">
                                     Número sugerido: <span className="text-emerald-400">{suggestions.number}</span>
                                 </p>
-                                {suggestions.message && (
-                                    <p className="text-gray-500 text-[9px] mt-2">{suggestions.message}</p>
-                                )}
-                                <div className="mt-3 pt-3 border-t border-emerald-500/20 text-[9px] text-yellow-500/70">
-                                    ⚠️ Verifique que este número corresponda al sorteo de {selectedDrawObj?.lottery_type} a las {selectedDrawObj?.draw_time}
-                                </div>
                             </div>
                             <button 
                                 onClick={useSuggestion} 
-                                className="px-6 py-3 bg-emerald-500 text-white font-black rounded-2xl hover:scale-105 transition-all whitespace-nowrap"
+                                className="px-6 py-3 bg-emerald-500 text-white font-black rounded-2xl hover:scale-105 transition-all"
                             >
-                                USAR NÚMERO
+                                USAR
                             </button>
                         </div>
                     </div>
                 ) : (
                     <div className="p-6 bg-gray-500/10 border border-gray-500/20 rounded-3xl text-center">
-                        <p className="text-gray-400 font-black text-sm">🔍 No hay sugerencia disponible para este sorteo</p>
-                        <p className="text-gray-500 text-[8px] mt-1">
-                            {selectedDrawObj 
-                                ? `Los resultados para ${selectedDrawObj.lottery_type} a las ${selectedDrawObj.draw_time} estarán disponibles 2 minutos después del sorteo`
-                                : 'Seleccione un sorteo para obtener sugerencias automáticas'}
-                        </p>
+                        <p className="text-gray-400 font-black text-sm">🔍 No hay sugerencia disponible</p>
                     </div>
                 )}
             </section>
 
             <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-10">
-                {/* Selector y Registro */}
                 <div className="lg:col-span-8 space-y-8">
                     <div className="glass-panel p-6 md:p-10 bg-black/20">
                         <div className="flex flex-col md:flex-row gap-4 mb-8">
@@ -208,26 +187,31 @@ export default function AdminResultsPage() {
                                 <option value="">Seleccionar sorteo...</option>
                                 {actionableDraws.map(d => (
                                     <option key={d.id} value={d.id}>
-                                        {d.lottery_type} - {d.draw_time} ({new Date(d.draw_date).toLocaleDateString()})
+                                        {d.lottery_type} - {d.draw_time} ({formatDrawDate(d.draw_date)})
                                     </option>
                                 ))}
                             </select>
                             <input 
-                                type="date" value={resultsDate} onChange={(e) => setResultsDate(e.target.value)}
+                                type="date" 
+                                value={resultsDate} 
+                                onChange={(e) => setResultsDate(e.target.value)}
                                 className="bg-black/40 border border-white/10 p-5 rounded-2xl text-white font-black"
                             />
                         </div>
 
                         <div className="flex flex-col items-center gap-8 py-10 bg-white/5 rounded-[3rem] border border-white/5">
-                            <p className="font-black text-gray-500 uppercase tracking-widest">Ingresar N&uacute;mero Ganador</p>
+                            <p className="font-black text-gray-500 uppercase tracking-widest">Ingresar Número Ganador</p>
                             <input 
-                                type="text" maxLength={2} value={winningNumber}
+                                type="text" 
+                                maxLength={2} 
+                                value={winningNumber}
                                 onChange={(e) => setWinningNumber(e.target.value.replace(/\D/g, ''))}
                                 placeholder="--"
                                 className="text-8xl md:text-[12rem] font-black text-red-500 bg-transparent text-center outline-none leading-none placeholder:text-gray-900"
                             />
                             <button 
-                                onClick={handleProcessDraw} disabled={processing || winningNumber.length !== 2 || !selectedDraw}
+                                onClick={handleProcessDraw} 
+                                disabled={processing || winningNumber.length !== 2 || !selectedDraw}
                                 className="w-full max-w-md py-6 bg-gradient-to-r from-red-600 to-red-500 rounded-[2rem] text-white font-black text-xl hover:scale-105 transition-all active:scale-95 disabled:opacity-20"
                             >
                                 {processing ? 'PROCESANDO...' : 'LIQUIDAR PREMIOS'}
@@ -236,7 +220,6 @@ export default function AdminResultsPage() {
                     </div>
                 </div>
 
-                {/* Pendientes */}
                 <div className="lg:col-span-4 space-y-6">
                     <h3 className="text-white font-black uppercase text-xs tracking-widest">Sorteos sin Ganador</h3>
                     <div className="space-y-4">
@@ -244,11 +227,11 @@ export default function AdminResultsPage() {
                             <div key={d.id} className="p-5 bg-red-500/5 border border-red-500/10 rounded-2xl flex justify-between items-center">
                                 <div>
                                     <p className="text-white font-black text-xs">{d.lottery_type} • {d.draw_time}</p>
-                                    <p className="text-[10px] text-gray-500">{new Date(d.draw_date).toLocaleDateString()}</p>
+                                    <p className="text-[10px] text-gray-500">{formatDrawDate(d.draw_date)}</p>
                                 </div>
                                 <button 
                                     onClick={() => { 
-                                        setResultsDate(new Date(d.draw_date).toLocaleDateString('en-CA')); 
+                                        setResultsDate(formatDrawDate(d.draw_date)); 
                                         setSelectedDraw(d.id);
                                         setWinningNumber('');
                                     }} 
