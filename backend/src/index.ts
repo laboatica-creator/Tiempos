@@ -126,6 +126,18 @@ app.get('/health', async (req: Request, res: Response) => {
   }
 });
 
+// 🔥 ENDPOINT PARA OBTENER LA HORA EXACTA DE COSTA RICA
+app.get('/api/time', (req: Request, res: Response) => {
+    const now = new Date();
+    const timeZone = 'America/Costa_Rica';
+    res.json({
+        serverTime: now.toISOString(),
+        costaRicaDate: now.toLocaleDateString('en-CA', { timeZone }),
+        costaRicaTime: now.toLocaleTimeString('en-GB', { timeZone, hour12: false }),
+        timezone: timeZone
+    });
+});
+
 console.log('🔧 [13] Health check configurado');
 
 const startServer = async () => {
