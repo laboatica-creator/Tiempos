@@ -38,7 +38,7 @@ export default function BettingPage() {
                 if (openDraws.length > 0) setSelectedDraw(openDraws[0].id);
             }
         } catch (err) {
-            console.error(err);
+            console.error('Error fetching draws:', err);
         } finally {
             setLoading(false);
         }
@@ -102,6 +102,7 @@ export default function BettingPage() {
                 fetchDraws();
             }
         } catch (err) {
+            console.error('Error placing bet:', err);
             alert('Error al realizar la apuesta');
         } finally {
             setSubmitting(false);
@@ -134,6 +135,7 @@ export default function BettingPage() {
                     </div>
                 ) : (
                     <>
+                        {/* Selector de sorteo */}
                         <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
                             <label className="block text-xs font-black text-gray-400 uppercase mb-2">Seleccionar sorteo</label>
                             <select
@@ -157,6 +159,7 @@ export default function BettingPage() {
                             )}
                         </div>
 
+                        {/* Grid de números y montos */}
                         <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
                             <div className="flex justify-between items-center mb-4">
                                 <h2 className="text-white font-black uppercase text-sm">Números (00-99)</h2>
@@ -210,6 +213,7 @@ export default function BettingPage() {
                             )}
                         </div>
 
+                        {/* Botón de apostar */}
                         <button
                             onClick={handleSubmit}
                             disabled={submitting || numbers.length === 0}
