@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../../../lib/api';
-import { formatDrawDate, getCurrentCostaRicaDate } from '../../../lib/dateUtils';
 
 interface Draw {
     id: string;
@@ -11,14 +10,6 @@ interface Draw {
     draw_time: string;
     status: string;
     winning_number?: string;
-    total_sold?: number;
-}
-
-interface WinningNumberInfo {
-    number: string;
-    count: number;
-    draw_id: string;
-    draw_time: string;
 }
 
 export default function AdminResultsPage() {
@@ -27,16 +18,17 @@ export default function AdminResultsPage() {
     const [winningNumber, setWinningNumber] = useState('');
     const [processing, setProcessing] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
-    const [resultsDate, setResultsDate] = useState(getCurrentCostaRicaDate());
-    const [filterDate, setFilterDate] = useState(getCurrentCostaRicaDate());
+    const [resultsDate, setResultsDate] = useState('');
+    const [filterDate, setFilterDate] = useState('');
     const [showFilter, setShowFilter] = useState(false);
-    const [todayWinningNumbers, setTodayWinningNumbers] = useState<WinningNumberInfo[]>([]);
-    const drawsRef = useRef<Draw[]>([]);
-
-    useEffect(() => { drawsRef.current = draws; }, [draws]);
+    const [todayWinningNumbers, setTodayWinningNumbers] = useState<any[]>([]);
 
     useEffect(() => {
         setIsMounted(true);
+        // Obtener fecha actual en formato YYYY-MM-DD
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+        setResultsDate(today);
+        setFilterDate(today);
         fetchDraws();
     }, []);
 
@@ -52,6 +44,10 @@ export default function AdminResultsPage() {
             const data = await api.get('/draws', token);
             if (Array.isArray(data)) {
                 setDraws(data);
+                // Seleccionar el primer sorteo abierto o cerrado del día
+                const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+                const todayDraw = data.find(d => d.draw_date === today && (d.status === 'OPEN' || d.status === 'CLOSED'));
+                if (todayDraw) setSelectedDraw(todayDraw.id);
             }
         } catch (err) { 
             console.error(err); 
@@ -59,14 +55,13 @@ export default function AdminResultsPage() {
     };
 
     const loadTodayWinningNumbers = () => {
-        const today = getCurrentCostaRicaDate();
-        const todayDraws = draws.filter(d => formatDrawDate(d.draw_date) === today && d.winning_number);
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+        const todayDraws = draws.filter(d => d.draw_date === today && d.winning_number);
         
-        const numbers: WinningNumberInfo[] = todayDraws.map(d => ({
+        const numbers = todayDraws.map(d => ({
             number: d.winning_number!,
-            count: 0, // Aquí se podría contar ganadores desde la BD
-            draw_id: d.id,
-            draw_time: d.draw_time
+            draw_time: d.draw_time,
+            lottery: d.lottery_type
         }));
         
         setTodayWinningNumbers(numbers);
@@ -88,34 +83,34 @@ export default function AdminResultsPage() {
                     alert('✅ Éxito al procesar sorteo.');
                     setWinningNumber('');
                     fetchDraws();
-                    loadTodayWinningNumbers();
                 }
             } catch (err) { alert('Error al procesar.'); }
             finally { setProcessing(false); }
         }
     };
 
+    // Formatear fecha de YYYY-MM-DD a DD/MM/YYYY
+    const formatDate = (dateStr: string) => {
+        if (!dateStr) return '';
+        const [year, month, day] = dateStr.split('-');
+        return `${day}/${month}/${year}`;
+    };
+
     if (!isMounted) return null;
 
-    // Sorteos pendientes SOLO del día presente
-    const today = getCurrentCostaRicaDate();
+    // Sorteos del día seleccionado para el selector
+    const actionableDraws = draws.filter(d => d.draw_date === resultsDate && (d.status === 'OPEN' || d.status === 'CLOSED'));
+
+    // Sorteos pendientes del día ACTUAL
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
     const pendingWinnerDraws = draws.filter(d => 
+        d.draw_date === today && 
         d.status === 'CLOSED' && 
-        !d.winning_number && 
-        formatDrawDate(d.draw_date) === today
+        !d.winning_number
     );
 
-    // Sorteos del día para el selector
-    const actionableDraws = draws.filter(d => {
-        const dDate = formatDrawDate(d.draw_date);
-        return dDate === resultsDate && (d.status === 'OPEN' || d.status === 'CLOSED');
-    });
-
     // Sorteos para el filtro de fechas pasadas
-    const filteredDrawsByDate = draws.filter(d => {
-        const dDate = formatDrawDate(d.draw_date);
-        return dDate === filterDate;
-    });
+    const filteredDrawsByDate = draws.filter(d => d.draw_date === filterDate);
 
     return (
         <main className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6 pb-20">
@@ -133,7 +128,7 @@ export default function AdminResultsPage() {
                         {todayWinningNumbers.map((item, idx) => (
                             <div key={idx} className="bg-black/40 rounded-xl p-3 min-w-[100px] text-center">
                                 <span className="text-3xl font-black text-emerald-400">{item.number}</span>
-                                <p className="text-gray-500 text-[9px] mt-1">{item.draw_time}</p>
+                                <p className="text-gray-500 text-[9px] mt-1">{item.lottery} - {item.draw_time}</p>
                             </div>
                         ))}
                     </div>
@@ -169,7 +164,7 @@ export default function AdminResultsPage() {
                                         <div key={draw.id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
                                             <div>
                                                 <p className="text-white font-bold text-sm">{draw.lottery_type} - {draw.draw_time}</p>
-                                                <p className="text-gray-500 text-[10px]">{formatDrawDate(draw.draw_date)}</p>
+                                                <p className="text-gray-500 text-[10px]">{formatDate(draw.draw_date)}</p>
                                             </div>
                                             <div>
                                                 {draw.winning_number ? (
@@ -204,7 +199,7 @@ export default function AdminResultsPage() {
                                 <option value="">Seleccionar sorteo...</option>
                                 {actionableDraws.map(d => (
                                     <option key={d.id} value={d.id}>
-                                        {d.lottery_type} - {d.draw_time} ({formatDrawDate(d.draw_date)})
+                                        {d.lottery_type} - {d.draw_time} ({formatDate(d.draw_date)})
                                     </option>
                                 ))}
                             </select>
@@ -249,11 +244,11 @@ export default function AdminResultsPage() {
                                     <div key={d.id} className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex justify-between items-center">
                                         <div>
                                             <p className="text-white font-black text-sm">{d.lottery_type} • {d.draw_time}</p>
-                                            <p className="text-[10px] text-gray-500">{formatDrawDate(d.draw_date)}</p>
+                                            <p className="text-[10px] text-gray-500">{formatDate(d.draw_date)}</p>
                                         </div>
                                         <button 
                                             onClick={() => { 
-                                                setResultsDate(formatDrawDate(d.draw_date)); 
+                                                setResultsDate(d.draw_date); 
                                                 setSelectedDraw(d.id);
                                                 setWinningNumber('');
                                             }} 
