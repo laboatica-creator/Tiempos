@@ -14,6 +14,7 @@ interface Draw {
 
 export default function BettingPage() {
     const [draws, setDraws] = useState<Draw[]>([]);
+    const [selectedLottery, setSelectedLottery] = useState<'TICA' | 'NICA'>('TICA');
     const [selectedDraw, setSelectedDraw] = useState<string>('');
     const [numbers, setNumbers] = useState<{ number: string; amount: number }[]>([]);
     const [loading, setLoading] = useState(true);
@@ -33,9 +34,7 @@ export default function BettingPage() {
             const token = sessionStorage.getItem('token');
             const data = await api.get('/draws', token);
             if (Array.isArray(data)) {
-                const openDraws = data.filter((d: Draw) => d.status === 'OPEN');
-                setDraws(openDraws);
-                if (openDraws.length > 0) setSelectedDraw(openDraws[0].id);
+                setDraws(data.filter((d: Draw) => d.status === 'OPEN'));
             }
         } catch (err) {
             console.error('Error fetching draws:', err);
@@ -43,6 +42,14 @@ export default function BettingPage() {
             setLoading(false);
         }
     };
+
+    const filteredDraws = draws.filter(d => d.lottery_type === selectedLottery);
+
+    useEffect(() => {
+        if (filteredDraws.length > 0 && !selectedDraw) {
+            setSelectedDraw(filteredDraws[0].id);
+        }
+    }, [filteredDraws, selectedDraw]);
 
     const handleAddNumber = () => {
         if (numbers.length >= 10) {
@@ -129,12 +136,37 @@ export default function BettingPage() {
                     </p>
                 </div>
 
-                {draws.length === 0 ? (
+                {/* Botones TICA / NICA */}
+                <div className="flex gap-4 mb-6">
+                    <button
+                        onClick={() => setSelectedLottery('TICA')}
+                        className={`flex-1 py-4 rounded-2xl font-black text-xl uppercase transition-all ${
+                            selectedLottery === 'TICA'
+                                ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg'
+                                : 'bg-white/5 text-gray-400 border border-white/10'
+                        }`}
+                    >
+                        🎰 TICA
+                    </button>
+                    <button
+                        onClick={() => setSelectedLottery('NICA')}
+                        className={`flex-1 py-4 rounded-2xl font-black text-xl uppercase transition-all ${
+                            selectedLottery === 'NICA'
+                                ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg'
+                                : 'bg-white/5 text-gray-400 border border-white/10'
+                        }`}
+                    >
+                        🎲 NICA
+                    </button>
+                </div>
+
+                {filteredDraws.length === 0 ? (
                     <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
-                        <p className="text-gray-400">No hay sorteos abiertos en este momento</p>
+                        <p className="text-gray-400">No hay sorteos abiertos de {selectedLottery}</p>
                     </div>
                 ) : (
                     <>
+                        {/* Selector de sorteo */}
                         <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
                             <label className="block text-xs font-black text-gray-400 uppercase mb-2">Seleccionar sorteo</label>
                             <select
@@ -142,9 +174,9 @@ export default function BettingPage() {
                                 onChange={(e) => setSelectedDraw(e.target.value)}
                                 className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white font-bold outline-none"
                             >
-                                {draws.map(draw => (
+                                {filteredDraws.map(draw => (
                                     <option key={draw.id} value={draw.id}>
-                                        {draw.lottery_type} - {formatDrawDate(draw.draw_date)} {draw.draw_time}
+                                        {formatDrawDate(draw.draw_date)} - {draw.draw_time}
                                     </option>
                                 ))}
                             </select>
@@ -153,11 +185,11 @@ export default function BettingPage() {
                                 <div className="mt-4 p-3 bg-white/5 rounded-xl">
                                     <p className="text-gray-400 text-xs">📅 Fecha: {formatDrawDate(selectedDrawObj.draw_date)}</p>
                                     <p className="text-gray-400 text-xs">⏰ Hora: {selectedDrawObj.draw_time}</p>
-                                    <p className="text-gray-400 text-xs">🎰 Lotería: {selectedDrawObj.lottery_type}</p>
                                 </div>
                             )}
                         </div>
 
+                        {/* Números y montos */}
                         <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
                             <div className="flex justify-between items-center mb-4">
                                 <h2 className="text-white font-black uppercase text-sm">Números (00-99)</h2>
