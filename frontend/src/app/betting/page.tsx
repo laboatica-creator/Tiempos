@@ -12,90 +12,126 @@ interface Draw {
     status: string;
 }
 
+interface BetItem {
+    number: string;
+    amount: number;
+}
+
+const BET_AMOUNTS = [200, 500, 1000, 5000];
+
 export default function BettingPage() {
-    const [allDraws, setAllDraws] = useState<Draw[]>([]);
+    const [draws, setDraws] = useState<Draw[]>([]);
     const [selectedLottery, setSelectedLottery] = useState<'TICA' | 'NICA'>('TICA');
-    const [selectedDraw, setSelectedDraw] = useState<string>('');
-    const [numbers, setNumbers] = useState<{ number: string; amount: number }[]>([]);
+    const [selectedDrawId, setSelectedDrawId] = useState<string>('');
+    const [balance, setBalance] = useState({ balance: 0, bonus_balance: 0 });
+    const [betItems, setBetItems] = useState<BetItem[]>([]);
+    const [selectedNumbers, setSelectedNumbers] = useState<Set<string>>(new Set());
+    const [selectedAmount, setSelectedAmount] = useState<number>(200);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [currentTime, setCurrentTime] = useState('');
+    const [availableDates, setAvailableDates] = useState<string[]>([]);
+    const [selectedDate, setSelectedDate] = useState<string>('');
 
-    // Cargar todos los sorteos al iniciar
     useEffect(() => {
-        fetchDraws();
+        fetchData();
         const interval = setInterval(() => {
             setCurrentTime(getCurrentCostaRicaTime());
         }, 1000);
         return () => clearInterval(interval);
     }, []);
 
-    // Cuando cambia la lotería seleccionada, actualizar el sorteo seleccionado
     useEffect(() => {
-        const drawsForLottery = allDraws.filter(d => d.lottery_type === selectedLottery);
-        if (drawsForLottery.length > 0) {
-            setSelectedDraw(drawsForLottery[0].id);
-        } else {
-            setSelectedDraw('');
+        if (selectedLottery && draws.length > 0) {
+            const lotteryDraws = draws.filter(d => d.lottery_type === selectedLottery);
+            const dates = [...new Set(lotteryDraws.map(d => d.draw_date))].sort();
+            setAvailableDates(dates);
+            if (dates.length > 0 && !selectedDate) {
+                setSelectedDate(dates[0]);
+            }
         }
-    }, [selectedLottery, allDraws]);
+    }, [selectedLottery, draws]);
 
-    const fetchDraws = async () => {
+    useEffect(() => {
+        if (selectedDate && selectedLottery) {
+            const draw = draws.find(d => d.lottery_type === selectedLottery && d.draw_date === selectedDate);
+            if (draw) {
+                setSelectedDrawId(draw.id);
+            }
+        }
+    }, [selectedDate, selectedLottery, draws]);
+
+    const fetchData = async () => {
         try {
             setLoading(true);
             const token = sessionStorage.getItem('token');
-            const data = await api.get('/draws', token);
-            if (Array.isArray(data)) {
-                // Filtrar solo sorteos OPEN
-                const openDraws = data.filter((d: Draw) => d.status === 'OPEN');
-                setAllDraws(openDraws);
+            if (!token) return;
+            
+            const [drawsData, balanceData] = await Promise.all([
+                api.get('/draws', token),
+                api.get('/wallet/balance', token)
+            ]);
+            
+            if (Array.isArray(drawsData)) {
+                setDraws(drawsData.filter(d => d.status === 'OPEN'));
+            }
+            if (balanceData && !balanceData.error) {
+                setBalance(balanceData);
             }
         } catch (err) {
-            console.error('Error fetching draws:', err);
+            console.error('Error fetching data:', err);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleAddNumber = () => {
-        if (numbers.length >= 10) {
-            alert('Máximo 10 números por apuesta');
-            return;
+    const handleNumberClick = (number: string) => {
+        const newSelected = new Set(selectedNumbers);
+        if (newSelected.has(number)) {
+            newSelected.delete(number);
+            setBetItems(betItems.filter(item => item.number !== number));
+        } else {
+            newSelected.add(number);
+            setBetItems([...betItems, { number, amount: selectedAmount }]);
         }
-        setNumbers([...numbers, { number: '', amount: 200 }]);
+        setSelectedNumbers(newSelected);
     };
 
-    const handleRemoveNumber = (index: number) => {
-        const newNumbers = [...numbers];
-        newNumbers.splice(index, 1);
-        setNumbers(newNumbers);
+    const handleAmountChangeForNumber = (number: string, amount: number) => {
+        setBetItems(betItems.map(item => 
+            item.number === number ? { ...item, amount } : item
+        ));
     };
 
-    const handleNumberChange = (index: number, value: string) => {
-        const newNumbers = [...numbers];
-        newNumbers[index].number = value.slice(0, 2);
-        setNumbers(newNumbers);
+    const handleBatchAmountChange = (amount: number) => {
+        setSelectedAmount(amount);
+        const newBetItems = betItems.map(item => ({ ...item, amount }));
+        setBetItems(newBetItems);
     };
 
-    const handleAmountChange = (index: number, value: string) => {
-        const newNumbers = [...numbers];
-        newNumbers[index].amount = parseInt(value) || 0;
-        setNumbers(newNumbers);
+    const clearSelection = () => {
+        setSelectedNumbers(new Set());
+        setBetItems([]);
     };
 
     const calculateTotal = () => {
-        return numbers.reduce((sum, n) => sum + (n.amount || 0), 0);
+        return betItems.reduce((sum, item) => sum + item.amount, 0);
     };
 
     const handleSubmit = async () => {
-        if (!selectedDraw) {
+        if (!selectedDrawId) {
             alert('Seleccione un sorteo');
             return;
         }
         
-        const validNumbers = numbers.filter(n => n.number && n.number.length === 2 && n.amount >= 200);
-        if (validNumbers.length === 0) {
-            alert('Agregue al menos un número válido (2 dígitos, monto mínimo ₡200)');
+        if (betItems.length === 0) {
+            alert('Seleccione al menos un número');
+            return;
+        }
+        
+        const total = calculateTotal();
+        if (total > balance.balance + balance.bonus_balance) {
+            alert('Saldo insuficiente');
             return;
         }
         
@@ -103,28 +139,25 @@ export default function BettingPage() {
         try {
             const token = sessionStorage.getItem('token');
             const response = await api.post('/bets/place', {
-                draw_id: selectedDraw,
-                bets: validNumbers.map(n => ({ number: n.number, amount: n.amount }))
+                draw_id: selectedDrawId,
+                bets: betItems.map(item => ({ number: item.number, amount: item.amount }))
             }, token);
             
             if (response.error) {
                 alert(response.error);
             } else {
-                alert(`✅ Apuesta realizada exitosamente!\nTotal: ₡${calculateTotal().toLocaleString()}`);
-                setNumbers([]);
-                fetchDraws();
+                alert(`✅ Apuesta realizada!\nTotal: ₡${total.toLocaleString()}`);
+                clearSelection();
+                fetchData();
             }
         } catch (err) {
-            console.error('Error placing bet:', err);
             alert('Error al realizar la apuesta');
         } finally {
             setSubmitting(false);
         }
     };
 
-    // Obtener los sorteos filtrados por la lotería seleccionada
-    const filteredDraws = allDraws.filter(d => d.lottery_type === selectedLottery);
-    const selectedDrawObj = allDraws.find(d => d.id === selectedDraw);
+    const currentDraw = draws.find(d => d.id === selectedDrawId);
 
     if (loading) {
         return (
@@ -136,12 +169,23 @@ export default function BettingPage() {
 
     return (
         <main className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-4 pb-32">
-            <div className="max-w-2xl mx-auto">
-                <div className="text-center mb-6">
-                    <h1 className="text-3xl font-black text-white uppercase italic">🎲 Apostar</h1>
-                    <p className="text-emerald-400 text-xs uppercase tracking-widest mt-1">
-                        Hora Costa Rica: {currentTime}
-                    </p>
+            <div className="max-w-4xl mx-auto">
+                {/* Header con saldo */}
+                <div className="flex justify-between items-center mb-6 p-4 bg-white/5 rounded-2xl">
+                    <div>
+                        <p className="text-gray-400 text-xs">Saldo disponible</p>
+                        <p className="text-white text-2xl font-black">₡{balance.balance.toLocaleString()}</p>
+                    </div>
+                    {balance.bonus_balance > 0 && (
+                        <div className="text-right">
+                            <p className="text-gray-400 text-xs">Bono</p>
+                            <p className="text-emerald-400 text-xl font-black">₡{balance.bonus_balance.toLocaleString()}</p>
+                        </div>
+                    )}
+                    <div>
+                        <p className="text-gray-400 text-xs">Hora CR</p>
+                        <p className="text-emerald-400 text-sm font-black">{currentTime}</p>
+                    </div>
                 </div>
 
                 {/* Botones TICA / NICA */}
@@ -168,106 +212,131 @@ export default function BettingPage() {
                     </button>
                 </div>
 
-                {/* Mostrar cantidad de sorteos encontrados */}
-                <div className="text-center mb-4">
-                    <p className="text-gray-500 text-xs">
-                        {filteredDraws.length} {filteredDraws.length === 1 ? 'sorteo disponible' : 'sorteos disponibles'} de {selectedLottery}
-                    </p>
+                {/* Selector de fecha (próximos 7 días) */}
+                {availableDates.length > 0 && (
+                    <div className="mb-6">
+                        <label className="block text-xs font-black text-gray-400 uppercase mb-2">Fecha del sorteo</label>
+                        <div className="flex gap-2 overflow-x-auto pb-2">
+                            {availableDates.map(date => (
+                                <button
+                                    key={date}
+                                    onClick={() => setSelectedDate(date)}
+                                    className={`px-4 py-2 rounded-xl whitespace-nowrap transition-all ${
+                                        selectedDate === date
+                                            ? 'bg-emerald-600 text-white'
+                                            : 'bg-white/5 text-gray-400 border border-white/10'
+                                    }`}
+                                >
+                                    {formatDrawDate(date)}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Información del sorteo seleccionado */}
+                {currentDraw && (
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6">
+                        <p className="text-gray-400 text-xs">Sorteo seleccionado</p>
+                        <p className="text-white font-bold">
+                            {currentDraw.lottery_type} - {formatDrawDate(currentDraw.draw_date)} {currentDraw.draw_time}
+                        </p>
+                    </div>
+                )}
+
+                {/* Parrilla de números 00-99 */}
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-white font-black uppercase text-sm">Selecciona números (00-99)</h2>
+                        <button
+                            onClick={clearSelection}
+                            className="text-red-400 text-xs font-black uppercase"
+                        >
+                            Limpiar todo
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-10 gap-1">
+                        {Array.from({ length: 100 }, (_, i) => {
+                            const num = i.toString().padStart(2, '0');
+                            const isSelected = selectedNumbers.has(num);
+                            return (
+                                <button
+                                    key={num}
+                                    onClick={() => handleNumberClick(num)}
+                                    className={`aspect-square rounded-lg text-sm font-black transition-all ${
+                                        isSelected
+                                            ? 'bg-emerald-500 text-white'
+                                            : 'bg-black/40 text-gray-400 hover:bg-white/10'
+                                    }`}
+                                >
+                                    {num}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
 
-                {filteredDraws.length === 0 ? (
-                    <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
-                        <p className="text-gray-400">No hay sorteos abiertos de {selectedLottery}</p>
-                        <p className="text-gray-500 text-xs mt-2">Los sorteos se generan automáticamente</p>
-                    </div>
-                ) : (
-                    <>
-                        {/* Selector de sorteo */}
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
-                            <label className="block text-xs font-black text-gray-400 uppercase mb-2">Seleccionar sorteo</label>
-                            <select
-                                value={selectedDraw}
-                                onChange={(e) => setSelectedDraw(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white font-bold outline-none"
+                {/* Montos predefinidos */}
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6">
+                    <h2 className="text-white font-black uppercase text-sm mb-3">Monto por número</h2>
+                    <div className="flex gap-3 mb-4">
+                        {BET_AMOUNTS.map(amount => (
+                            <button
+                                key={amount}
+                                onClick={() => handleBatchAmountChange(amount)}
+                                className={`flex-1 py-3 rounded-xl font-black transition-all ${
+                                    selectedAmount === amount
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'bg-white/5 text-gray-400 border border-white/10'
+                                }`}
                             >
-                                {filteredDraws.map(draw => (
-                                    <option key={draw.id} value={draw.id}>
-                                        {formatDrawDate(draw.draw_date)} - {draw.draw_time}
-                                    </option>
-                                ))}
-                            </select>
-                            
-                            {selectedDrawObj && (
-                                <div className="mt-4 p-3 bg-white/5 rounded-xl">
-                                    <p className="text-gray-400 text-xs">📅 Fecha: {formatDrawDate(selectedDrawObj.draw_date)}</p>
-                                    <p className="text-gray-400 text-xs">⏰ Hora: {selectedDrawObj.draw_time}</p>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Números y montos */}
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
-                            <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-white font-black uppercase text-sm">Números (00-99)</h2>
-                                <button
-                                    onClick={handleAddNumber}
-                                    className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase"
-                                >
-                                    + Agregar número
-                                </button>
-                            </div>
-                            
-                            {numbers.length === 0 ? (
-                                <p className="text-gray-500 text-center py-8 text-sm">
-                                    Agrega números del 00 al 99 (mínimo ₡200 por número)
-                                </p>
-                            ) : (
-                                <div className="space-y-3">
-                                    {numbers.map((item, idx) => (
-                                        <div key={idx} className="flex gap-3 items-center">
-                                            <input
-                                                type="text"
-                                                maxLength={2}
-                                                value={item.number}
-                                                onChange={(e) => handleNumberChange(idx, e.target.value)}
-                                                placeholder="00"
-                                                className="w-20 bg-black/40 border border-white/10 rounded-xl p-3 text-white text-center font-black text-xl outline-none"
-                                            />
-                                            <input
-                                                type="number"
-                                                value={item.amount || ''}
-                                                onChange={(e) => handleAmountChange(idx, e.target.value)}
-                                                placeholder="Monto"
-                                                className="flex-1 bg-black/40 border border-white/10 rounded-xl p-3 text-white font-bold outline-none"
-                                            />
-                                            <button
-                                                onClick={() => handleRemoveNumber(idx)}
-                                                className="bg-red-500/20 text-red-500 w-10 h-10 rounded-xl font-black"
-                                            >
-                                                ✕
-                                            </button>
+                                ₡{amount.toLocaleString()}
+                            </button>
+                        ))}
+                    </div>
+                    
+                    {/* Lista de números seleccionados con montos individuales */}
+                    {betItems.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-white/10">
+                            <p className="text-gray-400 text-xs mb-2">Números seleccionados:</p>
+                            <div className="space-y-2 max-h-40 overflow-y-auto">
+                                {betItems.map(item => (
+                                    <div key={item.number} className="flex justify-between items-center bg-black/40 p-2 rounded-lg">
+                                        <span className="text-white font-black text-lg">{item.number}</span>
+                                        <div className="flex gap-2">
+                                            {BET_AMOUNTS.map(amount => (
+                                                <button
+                                                    key={amount}
+                                                    onClick={() => handleAmountChangeForNumber(item.number, amount)}
+                                                    className={`px-3 py-1 rounded-lg text-xs font-black transition-all ${
+                                                        item.amount === amount
+                                                            ? 'bg-emerald-600 text-white'
+                                                            : 'bg-white/10 text-gray-400'
+                                                    }`}
+                                                >
+                                                    ₡{amount}
+                                                </button>
+                                            ))}
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                            
-                            {numbers.length > 0 && (
-                                <div className="mt-4 pt-4 border-t border-white/10 flex justify-between items-center">
-                                    <span className="text-gray-400 text-sm">Total:</span>
-                                    <span className="text-emerald-400 font-black text-xl">₡{calculateTotal().toLocaleString()}</span>
-                                </div>
-                            )}
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-3 pt-3 border-t border-white/10 flex justify-between items-center">
+                                <span className="text-white font-bold">Total:</span>
+                                <span className="text-emerald-400 font-black text-xl">₡{calculateTotal().toLocaleString()}</span>
+                            </div>
                         </div>
+                    )}
+                </div>
 
-                        <button
-                            onClick={handleSubmit}
-                            disabled={submitting || numbers.length === 0}
-                            className="w-full py-6 bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-2xl text-white font-black text-xl uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {submitting ? 'PROCESANDO...' : `APOSTAR ₡${calculateTotal().toLocaleString()}`}
-                        </button>
-                    </>
-                )}
+                {/* Botón de confirmar apuesta */}
+                <button
+                    onClick={handleSubmit}
+                    disabled={submitting || betItems.length === 0}
+                    className="w-full py-6 bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-2xl text-white font-black text-xl uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {submitting ? 'PROCESANDO...' : `CONFIRMAR APUESTA - ₡${calculateTotal().toLocaleString()}`}
+                </button>
             </div>
         </main>
     );
