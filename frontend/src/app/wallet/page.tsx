@@ -1,17 +1,22 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
+import { formatTransactionDate } from '../../lib/dateUtils';
+
+type TabType = 'recharge' | 'withdraw' | 'history';
 
 export default function WalletPage() {
     const [balance, setBalance] = useState({ balance: 0, bonus_balance: 0 });
     const [transactions, setTransactions] = useState<any[]>([]);
     const [publicMethods, setPublicMethods] = useState<any[]>([]);
+    const [activeTab, setActiveTab] = useState<TabType>('recharge');
     const [sinpeReference, setSinpeReference] = useState('');
     const [sinpeAmount, setSinpeAmount] = useState('');
     const [selectedSinpeBank, setSelectedSinpeBank] = useState('');
     const [withdrawAmount, setWithdrawAmount] = useState('');
     const [withdrawMethod, setWithdrawMethod] = useState('SINPE');
     const [withdrawDetails, setWithdrawDetails] = useState('');
+    const [loading, setLoading] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
@@ -23,6 +28,7 @@ export default function WalletPage() {
         const token = sessionStorage.getItem('token');
         if (!token) return;
         
+        setLoading(true);
         try {
             const [bal, txs, methods] = await Promise.all([
                 api.get('/wallet/balance', token),
@@ -38,6 +44,8 @@ export default function WalletPage() {
             }
         } catch (error) {
             console.error('Error fetching wallet data:', error);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -45,6 +53,11 @@ export default function WalletPage() {
         e.preventDefault();
         const token = sessionStorage.getItem('token');
         if (!token) return;
+        
+        if (!sinpeAmount || Number(sinpeAmount) < 1000) {
+            alert('El monto mínimo de recarga es ₡1,000');
+            return;
+        }
         
         try {
             const res = await api.post('/wallet/deposit/sinpe', {
@@ -56,10 +69,11 @@ export default function WalletPage() {
             if (res.error) {
                 alert(res.error);
             } else {
-                alert('Solicitud de recarga enviada correctamente');
+                alert('✅ Solicitud de recarga enviada correctamente');
                 setSinpeAmount('');
                 setSinpeReference('');
                 fetchWalletData();
+                setActiveTab('history');
             }
         } catch (error) {
             console.error('Error creating deposit:', error);
@@ -72,6 +86,16 @@ export default function WalletPage() {
         const token = sessionStorage.getItem('token');
         if (!token) return;
         
+        if (!withdrawAmount || Number(withdrawAmount) < 1000) {
+            alert('El monto mínimo de retiro es ₡1,000');
+            return;
+        }
+        
+        if (Number(withdrawAmount) > balance.balance) {
+            alert('Saldo insuficiente. El bono promocional no es retirable.');
+            return;
+        }
+        
         try {
             const res = await api.post('/wallet/withdraw', {
                 amount: Number(withdrawAmount),
@@ -82,10 +106,11 @@ export default function WalletPage() {
             if (res.error) {
                 alert(res.error);
             } else {
-                alert('Solicitud de retiro enviada correctamente');
+                alert('✅ Solicitud de retiro enviada correctamente');
                 setWithdrawAmount('');
                 setWithdrawDetails('');
                 fetchWalletData();
+                setActiveTab('history');
             }
         } catch (error) {
             console.error('Error creating withdrawal:', error);
@@ -96,145 +121,210 @@ export default function WalletPage() {
     if (!isMounted) return null;
 
     return (
-        <main className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-10 pb-32">
-            <header className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-6 md:p-10 rounded-[2rem] border border-white/5 shadow-2xl">
-                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2">Saldo Disponible</p>
-                    <h1 className="text-4xl md:text-6xl font-black text-white italic tracking-tighter">
-                        ₡{Number(balance.balance).toLocaleString()}
-                    </h1>
+        <main className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 pb-24">
+            {/* Header con saldos */}
+            <div className="bg-gradient-to-r from-emerald-800 to-emerald-600 p-6 rounded-b-3xl shadow-xl">
+                <h1 className="text-white text-2xl font-black italic mb-4">💰 Mi Billetera</h1>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white/10 rounded-2xl p-4 backdrop-blur">
+                        <p className="text-emerald-200 text-[10px] font-black uppercase tracking-wider">Saldo Disponible</p>
+                        <p className="text-white text-3xl font-black">₡{Number(balance.balance).toLocaleString()}</p>
+                    </div>
+                    <div className="bg-white/10 rounded-2xl p-4 backdrop-blur">
+                        <p className="text-emerald-200 text-[10px] font-black uppercase tracking-wider">Bono Promocional</p>
+                        <p className="text-yellow-300 text-2xl font-black">₡{Number(balance.bonus_balance).toLocaleString()}</p>
+                        <p className="text-[8px] text-white/50 mt-1">*Solo para apuestas</p>
+                    </div>
                 </div>
-                <div className="bg-emerald-500/5 p-6 md:p-10 rounded-[2rem] border border-emerald-500/20">
-                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2">Bono Promocional</p>
-                    <h1 className="text-4xl md:text-6xl font-black text-emerald-400 italic tracking-tighter">
-                        ₡{Number(balance.bonus_balance).toLocaleString()}
-                    </h1>
-                </div>
-            </header>
+            </div>
 
-            <section className="flex flex-col lg:flex-row gap-6 md:gap-10">
-                <div className="flex-1 glass-panel p-6 md:p-10 bg-black/20 border-blue-500/20 rounded-[2rem]">
-                    <h2 className="text-xl md:text-2xl font-black text-white uppercase italic mb-6">Recargar SINPE</h2>
-                    <form onSubmit={handleSinpeDeposit} className="space-y-5">
-                        <select 
-                            value={selectedSinpeBank} 
-                            onChange={(e) => setSelectedSinpeBank(e.target.value)}
-                            className="w-full bg-[#1e293b] border border-white/10 p-5 rounded-2xl text-white font-bold outline-none appearance-none"
-                        >
-                            {publicMethods.map((m, i) => (
-                                <option key={i} value={m.name}>{m.name} ({m.sinpePhone})</option>
-                            ))}
-                        </select>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Pestañas de navegación */}
+            <div className="flex bg-gray-800/50 mx-4 mt-6 rounded-2xl p-1">
+                <button
+                    onClick={() => setActiveTab('recharge')}
+                    className={`flex-1 py-3 rounded-xl font-black text-sm transition-all ${
+                        activeTab === 'recharge' 
+                            ? 'bg-emerald-500 text-white shadow-lg' 
+                            : 'text-gray-400'
+                    }`}
+                >
+                    📱 Recargar
+                </button>
+                <button
+                    onClick={() => setActiveTab('withdraw')}
+                    className={`flex-1 py-3 rounded-xl font-black text-sm transition-all ${
+                        activeTab === 'withdraw' 
+                            ? 'bg-emerald-500 text-white shadow-lg' 
+                            : 'text-gray-400'
+                    }`}
+                >
+                    💸 Retirar
+                </button>
+                <button
+                    onClick={() => setActiveTab('history')}
+                    className={`flex-1 py-3 rounded-xl font-black text-sm transition-all ${
+                        activeTab === 'history' 
+                            ? 'bg-emerald-500 text-white shadow-lg' 
+                            : 'text-gray-400'
+                    }`}
+                >
+                    📋 Historial
+                </button>
+            </div>
+
+            {/* Panel de Recargas */}
+            {activeTab === 'recharge' && (
+                <div className="mx-4 mt-6 bg-white/5 rounded-2xl p-5 border border-white/10">
+                    <h2 className="text-white font-black text-lg mb-4">📱 Recargar por SINPE</h2>
+                    <form onSubmit={handleSinpeDeposit} className="space-y-4">
+                        <div>
+                            <label className="text-gray-400 text-xs font-black uppercase block mb-2">Banco Destino</label>
+                            <select 
+                                value={selectedSinpeBank} 
+                                onChange={(e) => setSelectedSinpeBank(e.target.value)}
+                                className="w-full bg-gray-800 border border-white/10 p-4 rounded-xl text-white font-bold outline-none appearance-none"
+                            >
+                                {publicMethods.map((m, i) => (
+                                    <option key={i} value={m.name}>{m.name} ({m.sinpePhone})</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-gray-400 text-xs font-black uppercase block mb-2">Monto (₡)</label>
                             <input 
                                 type="number" 
                                 value={sinpeAmount} 
                                 onChange={(e) => setSinpeAmount(e.target.value)} 
-                                placeholder="Monto (₡)" 
-                                className="bg-[#1e293b] border border-white/10 p-5 rounded-2xl text-white font-black outline-none"
+                                placeholder="Ej: 5000"
+                                className="w-full bg-gray-800 border border-white/10 p-4 rounded-xl text-white font-black outline-none"
                                 required
                             />
+                        </div>
+                        <div>
+                            <label className="text-gray-400 text-xs font-black uppercase block mb-2">Referencia SINPE</label>
                             <input 
                                 type="text" 
                                 value={sinpeReference} 
                                 onChange={(e) => setSinpeReference(e.target.value)} 
-                                placeholder="Referencia" 
-                                className="bg-[#1e293b] border border-white/10 p-5 rounded-2xl text-white font-black outline-none"
+                                placeholder="Código de la transferencia"
+                                className="w-full bg-gray-800 border border-white/10 p-4 rounded-xl text-white font-black outline-none"
                                 required
                             />
                         </div>
                         <button 
                             type="submit"
-                            className="w-full py-6 bg-gradient-to-r from-blue-600 to-blue-500 rounded-2xl text-white font-black text-xs uppercase tracking-widest hover:brightness-110 transition-all"
+                            className="w-full py-4 bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-xl text-white font-black text-sm uppercase tracking-wider"
                         >
-                            Reportar Depósito
+                            Enviar Solicitud
                         </button>
                     </form>
                 </div>
+            )}
 
-                <div className="flex-1 glass-panel p-6 md:p-10 bg-black/20 border-amber-500/20 rounded-[2rem]">
-                    <h2 className="text-xl md:text-2xl font-black text-white uppercase italic mb-6">Solicitar Retiro</h2>
-                    <form onSubmit={handleWithdrawal} className="space-y-5">
-                        <input 
-                            type="number" 
-                            value={withdrawAmount} 
-                            onChange={(e) => setWithdrawAmount(e.target.value)} 
-                            placeholder="Monto (₡)" 
-                            className="w-full bg-[#1e293b] border border-white/10 p-5 rounded-2xl text-white font-black outline-none"
-                            required
-                        />
-                        <select 
-                            value={withdrawMethod} 
-                            onChange={(e) => setWithdrawMethod(e.target.value)}
-                            className="w-full bg-[#1e293b] border border-white/10 p-5 rounded-2xl text-white font-bold outline-none appearance-none"
-                        >
-                            <option value="SINPE">SINPE Móvil</option>
-                            <option value="IBAN">Transferencia IBAN</option>
-                        </select>
-                        <input 
-                            type="text" 
-                            value={withdrawDetails} 
-                            onChange={(e) => setWithdrawDetails(e.target.value)} 
-                            placeholder="Número de cuenta / teléfono" 
-                            className="w-full bg-[#1e293b] border border-white/10 p-5 rounded-2xl text-white font-black outline-none"
-                            required={withdrawMethod === 'IBAN'}
-                        />
+            {/* Panel de Retiros */}
+            {activeTab === 'withdraw' && (
+                <div className="mx-4 mt-6 bg-white/5 rounded-2xl p-5 border border-white/10">
+                    <h2 className="text-white font-black text-lg mb-4">💸 Solicitar Retiro</h2>
+                    <div className="mb-4 p-3 bg-yellow-500/10 rounded-xl border border-yellow-500/20">
+                        <p className="text-yellow-400 text-[10px] font-black uppercase">Saldo disponible para retiro</p>
+                        <p className="text-white text-2xl font-black">₡{Number(balance.balance).toLocaleString()}</p>
+                    </div>
+                    <form onSubmit={handleWithdrawal} className="space-y-4">
+                        <div>
+                            <label className="text-gray-400 text-xs font-black uppercase block mb-2">Monto a retirar (₡)</label>
+                            <input 
+                                type="number" 
+                                value={withdrawAmount} 
+                                onChange={(e) => setWithdrawAmount(e.target.value)} 
+                                placeholder="Mínimo ₡1,000"
+                                className="w-full bg-gray-800 border border-white/10 p-4 rounded-xl text-white font-black outline-none"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="text-gray-400 text-xs font-black uppercase block mb-2">Método</label>
+                            <select 
+                                value={withdrawMethod} 
+                                onChange={(e) => setWithdrawMethod(e.target.value)}
+                                className="w-full bg-gray-800 border border-white/10 p-4 rounded-xl text-white font-bold outline-none appearance-none"
+                            >
+                                <option value="SINPE">SINPE Móvil</option>
+                                <option value="IBAN">Transferencia IBAN</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-gray-400 text-xs font-black uppercase block mb-2">
+                                {withdrawMethod === 'SINPE' ? 'Número de teléfono' : 'Número de cuenta IBAN'}
+                            </label>
+                            <input 
+                                type="text" 
+                                value={withdrawDetails} 
+                                onChange={(e) => setWithdrawDetails(e.target.value)} 
+                                placeholder={withdrawMethod === 'SINPE' ? 'Ej: 506XXXXXXXX' : 'CR00 0000 0000 0000 0000'}
+                                className="w-full bg-gray-800 border border-white/10 p-4 rounded-xl text-white font-black outline-none"
+                                required
+                            />
+                        </div>
                         <button 
                             type="submit"
-                            className="w-full py-6 bg-gradient-to-r from-amber-600 to-amber-500 rounded-2xl text-white font-black text-xs uppercase tracking-widest hover:brightness-110 transition-all"
+                            className="w-full py-4 bg-gradient-to-r from-orange-600 to-orange-500 rounded-xl text-white font-black text-sm uppercase tracking-wider"
                         >
                             Solicitar Retiro
                         </button>
                     </form>
                 </div>
-            </section>
+            )}
 
-            <section className="glass-panel p-6 md:p-10 border-white/5 rounded-[2rem] overflow-hidden">
-                <h2 className="text-xl md:text-2xl font-black text-white uppercase italic mb-8">Historial Unificado</h2>
-                <div className="overflow-x-auto -mx-6 px-6">
-                    <table className="w-full min-w-[600px]">
-                        <thead className="text-[9px] text-gray-500 uppercase font-black tracking-widest border-b border-white/5">
-                            <tr className="text-left">
-                                <th className="pb-4">Fecha</th>
-                                <th className="pb-4">Tipo</th>
-                                <th className="pb-4">Detalles</th>
-                                <th className="pb-4 text-right">Monto</th>
-                                <th className="pb-4 text-right">Estado</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
+            {/* Panel de Historial */}
+            {activeTab === 'history' && (
+                <div className="mx-4 mt-6 bg-white/5 rounded-2xl p-5 border border-white/10 mb-6">
+                    <h2 className="text-white font-black text-lg mb-4">📋 Historial de Transacciones</h2>
+                    {loading ? (
+                        <div className="flex justify-center py-10">
+                            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-emerald-500"></div>
+                        </div>
+                    ) : transactions.length === 0 ? (
+                        <div className="text-center py-10">
+                            <p className="text-gray-500">No hay transacciones registradas</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
                             {transactions.map((tx, idx) => (
-                                <tr key={idx} className="group">
-                                    <td className="py-4 text-[10px] text-gray-400 font-mono">
-                                        {new Date(tx.created_at).toLocaleDateString()}
-                                    </td>
-                                    <td className="py-4 text-[10px] font-black text-white uppercase">{tx.type}</td>
-                                    <td className="py-4 text-[10px] text-gray-500 truncate max-w-[150px]">{tx.details || '-'}</td>
-                                    <td className={`py-4 text-right font-black italic ${tx.type === 'DEPÓSITO' || tx.type === 'WIN' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                        ₡{Number(tx.amount).toLocaleString()}
-                                    </td>
-                                    <td className="py-4 text-right">
-                                        <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase ${
-                                            tx.status === 'APPROVED' || tx.status === 'COMPLETED' 
-                                                ? 'bg-emerald-500/20 text-emerald-400' 
-                                                : 'bg-amber-500/20 text-amber-500'
-                                        }`}>
-                                            {tx.status === 'PENDING' ? 'PENDIENTE' : tx.status}
-                                        </span>
-                                    </td>
-                                </tr>
+                                <div key={idx} className="bg-gray-800/50 rounded-xl p-4">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className={`text-xs font-black uppercase ${
+                                                tx.type === 'DEPÓSITO' ? 'text-emerald-400' : 
+                                                tx.type === 'RETIRO' ? 'text-orange-400' : 'text-blue-400'
+                                            }`}>
+                                                {tx.type}
+                                            </p>
+                                            <p className="text-gray-400 text-[10px] mt-1">
+                                                {formatTransactionDate(tx.created_at)}
+                                            </p>
+                                            <p className="text-gray-500 text-[9px] mt-1 truncate max-w-[150px]">
+                                                {tx.details || 'Transacción'}
+                                            </p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className={`font-black text-base ${
+                                                tx.type === 'DEPÓSITO' || tx.type === 'WIN' ? 'text-emerald-400' : 'text-red-400'
+                                            }`}>
+                                                {tx.type === 'DEPÓSITO' || tx.type === 'WIN' ? '+' : '-'}₡{Number(tx.amount).toLocaleString()}
+                                            </p>
+                                            <p className={`text-[8px] font-black uppercase mt-1 ${
+                                                tx.status === 'COMPLETED' || tx.status === 'APPROVED' ? 'text-green-500' : 'text-yellow-500'
+                                            }`}>
+                                                {tx.status === 'PENDING' ? 'Pendiente' : tx.status}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
                             ))}
-                            {transactions.length === 0 && (
-                                <tr>
-                                    <td colSpan={5} className="py-10 text-center text-gray-500">
-                                        No hay transacciones registradas
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+                        </div>
+                    )}
                 </div>
-            </section>
+            )}
         </main>
     );
 }
