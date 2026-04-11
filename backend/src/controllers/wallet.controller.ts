@@ -73,11 +73,22 @@ export const requestWithdrawal = async (req: AuthRequest, res: Response) => {
     }
 };
 
+// 🔥 CORREGIDO: Elimina duplicados por banco y teléfono
 export const getPaymentMethods = async (req: AuthRequest, res: Response) => {
     try {
+        const userId = req.user?.id;
         const result = await pool.query(
-            `SELECT DISTINCT ON (bank_name) id, bank_name as name, phone_number as "sinpePhone" 
-             FROM payment_methods WHERE is_active = true ORDER BY bank_name`
+            `SELECT DISTINCT ON (bank_name, phone_number) 
+                id, 
+                bank_name as name, 
+                phone_number as "sinpePhone", 
+                account_number as account, 
+                is_active 
+             FROM payment_methods 
+             WHERE is_active = true 
+               AND (user_id = $1 OR user_id IS NULL)
+             ORDER BY bank_name, phone_number, user_id NULLS FIRST`,
+            [userId]
         );
         res.json(result.rows);
     } catch (error) { 
@@ -86,10 +97,23 @@ export const getPaymentMethods = async (req: AuthRequest, res: Response) => {
     }
 };
 
+// 🔥 CORREGIDO: Verifica si ya existe antes de insertar
 export const addPaymentMethod = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const { type, bank_name, phone_number, account_number } = req.body;
+        
+        // Verificar si ya existe un método de pago con el mismo banco y teléfono
+        const existing = await pool.query(
+            `SELECT id FROM payment_methods 
+             WHERE bank_name = $1 AND phone_number = $2 AND (user_id = $3 OR user_id IS NULL)`,
+            [bank_name, phone_number, userId]
+        );
+        
+        if (existing.rows.length > 0) {
+            return res.status(400).json({ error: 'Este método de pago ya está registrado' });
+        }
+        
         await pool.query(
             `INSERT INTO payment_methods (user_id, type, bank_name, phone_number, account_number) 
              VALUES ($1, $2, $3, $4, $5)`,

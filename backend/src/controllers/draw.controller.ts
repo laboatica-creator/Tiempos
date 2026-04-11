@@ -24,17 +24,32 @@ export const getDraws = async (req: Request, res: Response) => {
     try {
         const { date, status } = req.query;
         const timeZone = 'America/Costa_Rica';
+        
+        // Obtener fecha actual en Costa Rica
         const today = new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date());
+        console.log(`[DRAWS] Fecha actual Costa Rica: ${today}`);
 
         let query = `
-            SELECT d.*, 
-            (SELECT COALESCE(SUM(total_amount), 0) FROM bets WHERE draw_id = d.id AND status != 'CANCELLED') as total_sold
+            SELECT 
+                d.id,
+                d.lottery_type,
+                d.draw_date,
+                d.draw_time,
+                d.status,
+                d.winning_number,
+                d.max_exposure_limit,
+                d.min_bet,
+                d.max_bet,
+                d.created_at,
+                d.updated_at,
+                (SELECT COALESCE(SUM(total_amount), 0) FROM bets WHERE draw_id = d.id AND status != 'CANCELLED') as total_sold
             FROM draws d 
             WHERE 1=1
         `;
         const params: any[] = [];
 
         if (date) {
+            // La fecha viene en formato YYYY-MM-DD (Costa Rica)
             params.push(date);
             query += ` AND d.draw_date = $${params.length}`;
         } else if (status === 'ACTIVE') {
@@ -45,7 +60,15 @@ export const getDraws = async (req: Request, res: Response) => {
         query += ` ORDER BY d.draw_date ASC, d.draw_time ASC LIMIT 100`;
 
         const result = await pool.query(query, params);
-        res.json(result.rows);
+        
+        // Convertir draw_date a string ISO sin modificar (ya es DATE en BD)
+        // El frontend se encargará de formatear con la zona horaria correcta
+        const rows = result.rows.map(row => ({
+            ...row,
+            draw_date: row.draw_date ? row.draw_date.toISOString().split('T')[0] : null
+        }));
+        
+        res.json(rows);
     } catch (error) {
         console.error('Error fetching draws:', error);
         res.status(500).json({ error: 'Internal server error' });
@@ -163,7 +186,6 @@ export const cancelDraw = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// 🔥 CORREGIDA: Ahora pasa lottery_type al scraper
 export const getSuggestedResults = async (req: AuthRequest, res: Response) => {
     try {
         const { drawId } = req.query;
@@ -189,7 +211,6 @@ export const getSuggestedResults = async (req: AuthRequest, res: Response) => {
         
         console.log(`[SUGGESTIONS] Buscando para ${lottery_type} a las ${draw_time} del ${draw_date}`);
         
-        // 🔥 Pasar lottery_type al scraper
         const result = await ScraperService.getSuggestedResults(draw_time, draw_date, lottery_type);
         
         console.log('[SUGGESTIONS] Resultado del scraper:', result);
