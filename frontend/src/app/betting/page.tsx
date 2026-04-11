@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
-import { formatDrawDate, formatDrawDateTime, getCurrentCostaRicaTime } from '../../lib/dateUtils';
+import { formatDrawDate, getCurrentCostaRicaTime } from '../../lib/dateUtils';
 
 interface Draw {
     id: string;
@@ -10,28 +10,21 @@ interface Draw {
     draw_date: string;
     draw_time: string;
     status: string;
-    winning_number?: string;
-    total_sold?: number;
 }
 
 export default function BettingPage() {
     const [draws, setDraws] = useState<Draw[]>([]);
     const [selectedDraw, setSelectedDraw] = useState<string>('');
-    const [selectedLottery, setSelectedLottery] = useState<string>('TICA');
     const [numbers, setNumbers] = useState<{ number: string; amount: number }[]>([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-    const [isMounted, setIsMounted] = useState(false);
-    const [currentTime, setCurrentTime] = useState<string>('');
+    const [currentTime, setCurrentTime] = useState('');
 
     useEffect(() => {
-        setIsMounted(true);
         fetchDraws();
-        
         const interval = setInterval(() => {
             setCurrentTime(getCurrentCostaRicaTime());
         }, 1000);
-        
         return () => clearInterval(interval);
     }, []);
 
@@ -40,15 +33,12 @@ export default function BettingPage() {
             const token = sessionStorage.getItem('token');
             const data = await api.get('/draws', token);
             if (Array.isArray(data)) {
-                setDraws(data);
                 const openDraws = data.filter((d: Draw) => d.status === 'OPEN');
-                if (openDraws.length > 0) {
-                    setSelectedDraw(openDraws[0].id);
-                    setSelectedLottery(openDraws[0].lottery_type);
-                }
+                setDraws(openDraws);
+                if (openDraws.length > 0) setSelectedDraw(openDraws[0].id);
             }
         } catch (err) {
-            console.error('Error fetching draws:', err);
+            console.error(err);
         } finally {
             setLoading(false);
         }
@@ -112,7 +102,6 @@ export default function BettingPage() {
                 fetchDraws();
             }
         } catch (err) {
-            console.error('Error placing bet:', err);
             alert('Error al realizar la apuesta');
         } finally {
             setSubmitting(false);
@@ -121,8 +110,6 @@ export default function BettingPage() {
 
     const selectedDrawObj = draws.find(d => d.id === selectedDraw);
 
-    if (!isMounted) return null;
-
     if (loading) {
         return (
             <div className="flex justify-center items-center h-screen bg-[#0f172a]">
@@ -130,8 +117,6 @@ export default function BettingPage() {
             </div>
         );
     }
-
-    const openDraws = draws.filter(d => d.status === 'OPEN');
 
     return (
         <main className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-4 pb-32">
@@ -143,7 +128,7 @@ export default function BettingPage() {
                     </p>
                 </div>
 
-                {openDraws.length === 0 ? (
+                {draws.length === 0 ? (
                     <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
                         <p className="text-gray-400">No hay sorteos abiertos en este momento</p>
                     </div>
@@ -153,16 +138,12 @@ export default function BettingPage() {
                             <label className="block text-xs font-black text-gray-400 uppercase mb-2">Seleccionar sorteo</label>
                             <select
                                 value={selectedDraw}
-                                onChange={(e) => {
-                                    const draw = draws.find(d => d.id === e.target.value);
-                                    setSelectedDraw(e.target.value);
-                                    if (draw) setSelectedLottery(draw.lottery_type);
-                                }}
+                                onChange={(e) => setSelectedDraw(e.target.value)}
                                 className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white font-bold outline-none"
                             >
-                                {openDraws.map(draw => (
+                                {draws.map(draw => (
                                     <option key={draw.id} value={draw.id}>
-                                        {draw.lottery_type} - {formatDrawDateTime(draw.draw_date, draw.draw_time)}
+                                        {draw.lottery_type} - {formatDrawDate(draw.draw_date)} {draw.draw_time}
                                     </option>
                                 ))}
                             </select>
@@ -178,7 +159,7 @@ export default function BettingPage() {
 
                         <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
                             <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-white font-black uppercase text-sm">Números</h2>
+                                <h2 className="text-white font-black uppercase text-sm">Números (00-99)</h2>
                                 <button
                                     onClick={handleAddNumber}
                                     className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase"
@@ -189,7 +170,7 @@ export default function BettingPage() {
                             
                             {numbers.length === 0 ? (
                                 <p className="text-gray-500 text-center py-8 text-sm">
-                                    Agrega números para apostar (mínimo ₡200 por número)
+                                    Agrega números del 00 al 99 (mínimo ₡200 por número)
                                 </p>
                             ) : (
                                 <div className="space-y-3">
