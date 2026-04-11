@@ -33,6 +33,8 @@ export default function BettingPage() {
     const [submitting, setSubmitting] = useState(false);
     const [currentTime, setCurrentTime] = useState('');
     const [showNumberGrid, setShowNumberGrid] = useState(false);
+    const [selectedDate, setSelectedDate] = useState<string>('');
+    const [availableDates, setAvailableDates] = useState<string[]>([]);
 
     useEffect(() => {
         fetchData();
@@ -43,10 +45,46 @@ export default function BettingPage() {
     }, []);
 
     useEffect(() => {
-        // Resetear selección cuando cambia la lotería
+        if (selectedLottery && draws.length > 0) {
+            // Obtener fecha actual en Costa Rica
+            const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+            
+            // Filtrar sorteos desde hoy hasta 7 días después
+            const maxDate = new Date();
+            maxDate.setDate(maxDate.getDate() + 7);
+            const maxDateStr = maxDate.toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+            
+            const lotteryDraws = draws.filter(d => 
+                d.lottery_type === selectedLottery && 
+                d.draw_date >= today && 
+                d.draw_date <= maxDateStr
+            );
+            
+            const dates = [...new Set(lotteryDraws.map(d => d.draw_date))].sort();
+            setAvailableDates(dates);
+            if (dates.length > 0 && !selectedDate) {
+                setSelectedDate(dates[0]);
+            }
+        }
+    }, [selectedLottery, draws]);
+
+    useEffect(() => {
+        if (selectedDate && selectedLottery) {
+            const draw = draws.find(d => d.lottery_type === selectedLottery && d.draw_date === selectedDate);
+            if (draw) {
+                setSelectedDraw(draw);
+            } else {
+                setSelectedDraw(null);
+            }
+        }
+    }, [selectedDate, selectedLottery, draws]);
+
+    useEffect(() => {
+        // Resetear cuando cambia la lotería
         setSelectedDraw(null);
         setShowNumberGrid(false);
         setSelectedNumbers(new Set());
+        setSelectedDate('');
     }, [selectedLottery]);
 
     const fetchData = async () => {
@@ -103,13 +141,13 @@ export default function BettingPage() {
         const newItem: CartItem = {
             draw_id: selectedDraw.id,
             draw_info: `${selectedDraw.lottery_type} - ${formatDrawDate(selectedDraw.draw_date)} ${selectedDraw.draw_time}`,
-            numbers: Array.from(selectedNumbers),
+            numbers: Array.from(selectedNumbers).sort(),
             amount: selectedAmount
         };
         
         setCart([...cart, newItem]);
         setSelectedNumbers(new Set());
-        alert(`Agregado: ${selectedNumbers.size} número(s) por ₡${selectedAmount} c/u`);
+        alert(`✅ Agregado: ${selectedNumbers.size} número(s) por ₡${selectedAmount} c/u`);
     };
 
     const removeFromCart = (index: number) => {
@@ -179,10 +217,15 @@ export default function BettingPage() {
         }
     };
 
-    const filteredDraws = draws.filter(d => 
-        d.lottery_type === selectedLottery && 
-        (d.status === 'OPEN' || d.status === 'CLOSED')
-    );
+    const getDrawsForSelectedDate = () => {
+        if (!selectedDate) return [];
+        return draws.filter(d => 
+            d.lottery_type === selectedLottery && 
+            d.draw_date === selectedDate
+        );
+    };
+
+    const drawsForDate = getDrawsForSelectedDate();
 
     if (loading) {
         return (
@@ -234,28 +277,58 @@ export default function BettingPage() {
                     </button>
                 </div>
 
-                {/* Lista de sorteos disponibles */}
-                {!showNumberGrid && (
+                {/* Pestañas de fechas (próximos 7 días) */}
+                {availableDates.length > 0 && !showNumberGrid && (
+                    <div className="mb-6">
+                        <p className="text-gray-400 text-xs mb-2">Fechas disponibles</p>
+                        <div className="flex gap-2 overflow-x-auto pb-2">
+                            {availableDates.map(date => (
+                                <button
+                                    key={date}
+                                    onClick={() => setSelectedDate(date)}
+                                    className={`px-4 py-2 rounded-xl whitespace-nowrap transition-all ${
+                                        selectedDate === date
+                                            ? 'bg-emerald-600 text-white'
+                                            : 'bg-white/5 text-gray-400 border border-white/10'
+                                    }`}
+                                >
+                                    {formatDrawDate(date)}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Lista de sorteos para la fecha seleccionada */}
+                {!showNumberGrid && selectedDate && (
                     <div className="space-y-3 mb-6">
-                        <p className="text-gray-400 text-xs mb-2">Sorteos disponibles</p>
-                        {filteredDraws.length === 0 ? (
+                        <p className="text-gray-400 text-xs mb-2">
+                            Sorteos del {formatDrawDate(selectedDate)}
+                        </p>
+                        {drawsForDate.length === 0 ? (
                             <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
-                                <p className="text-gray-400">No hay sorteos disponibles de {selectedLottery}</p>
+                                <p className="text-gray-400">No hay sorteos disponibles para esta fecha</p>
                             </div>
                         ) : (
-                            filteredDraws.map(draw => (
+                            drawsForDate.map(draw => (
                                 <button
                                     key={draw.id}
                                     onClick={() => handleDrawClick(draw)}
                                     className="w-full p-4 bg-white/5 border border-white/10 rounded-2xl text-left hover:bg-white/10 transition-all"
                                 >
-                                    <p className="text-white font-bold">{draw.lottery_type}</p>
-                                    <p className="text-gray-400 text-sm">
-                                        {formatDrawDate(draw.draw_date)} - {draw.draw_time}
-                                    </p>
-                                    <p className={`text-xs mt-1 ${draw.status === 'OPEN' ? 'text-green-400' : 'text-yellow-400'}`}>
-                                        {draw.status === 'OPEN' ? '🟢 Abierto' : '🔵 Cerrado'}
-                                    </p>
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <p className="text-white font-bold">{draw.lottery_type}</p>
+                                            <p className="text-gray-400 text-sm">{draw.draw_time}</p>
+                                        </div>
+                                        <span className={`text-xs px-2 py-1 rounded-full ${
+                                            draw.status === 'OPEN' 
+                                                ? 'bg-green-500/20 text-green-400' 
+                                                : 'bg-yellow-500/20 text-yellow-400'
+                                        }`}>
+                                            {draw.status === 'OPEN' ? 'ABIERTO' : 'CERRADO'}
+                                        </span>
+                                    </div>
                                 </button>
                             ))
                         )}
@@ -267,13 +340,24 @@ export default function BettingPage() {
                     <>
                         {/* Información del sorteo seleccionado */}
                         <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6">
-                            <p className="text-gray-400 text-xs">Sorteo seleccionado</p>
-                            <p className="text-white font-bold">
-                                {selectedDraw.lottery_type} - {formatDrawDate(selectedDraw.draw_date)} {selectedDraw.draw_time}
-                            </p>
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <p className="text-gray-400 text-xs">Sorteo seleccionado</p>
+                                    <p className="text-white font-bold">
+                                        {selectedDraw.lottery_type} - {formatDrawDate(selectedDraw.draw_date)} {selectedDraw.draw_time}
+                                    </p>
+                                </div>
+                                <span className={`text-xs px-2 py-1 rounded-full ${
+                                    selectedDraw.status === 'OPEN' 
+                                        ? 'bg-green-500/20 text-green-400' 
+                                        : 'bg-yellow-500/20 text-yellow-400'
+                                }`}>
+                                    {selectedDraw.status === 'OPEN' ? 'ABIERTO' : 'CERRADO'}
+                                </span>
+                            </div>
                         </div>
 
-                        {/* Parrilla de números 00-99 */}
+                        {/* Parrilla de números 00-99 (7 columnas) */}
                         <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6">
                             <div className="flex justify-between items-center mb-4">
                                 <h2 className="text-white font-black uppercase text-sm">Selecciona números (00-99)</h2>
@@ -284,7 +368,7 @@ export default function BettingPage() {
                                     Limpiar todo
                                 </button>
                             </div>
-                            <div className="grid grid-cols-10 gap-1">
+                            <div className="grid grid-cols-7 gap-1">
                                 {Array.from({ length: 100 }, (_, i) => {
                                     const num = i.toString().padStart(2, '0');
                                     const isSelected = selectedNumbers.has(num);
@@ -325,13 +409,30 @@ export default function BettingPage() {
                             </div>
                         </div>
 
+                        {/* Resumen de números seleccionados */}
+                        {selectedNumbers.size > 0 && (
+                            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 mb-6">
+                                <p className="text-gray-300 text-xs mb-2">Números seleccionados:</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {Array.from(selectedNumbers).sort().map(num => (
+                                        <span key={num} className="px-3 py-1 bg-emerald-500/30 text-emerald-400 rounded-full text-sm font-black">
+                                            {num}
+                                        </span>
+                                    ))}
+                                </div>
+                                <p className="text-emerald-400 text-sm font-black mt-3">
+                                    Total: ₡{(selectedNumbers.size * selectedAmount).toLocaleString()}
+                                </p>
+                            </div>
+                        )}
+
                         {/* Botón Agregar jugada */}
                         <button
                             onClick={handleAddToCart}
                             disabled={selectedNumbers.size === 0}
                             className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-500 rounded-2xl text-white font-black text-lg uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed mb-6"
                         >
-                            + AGREGAR JUGADA ({selectedNumbers.size} números - ₡{(selectedNumbers.size * selectedAmount).toLocaleString()})
+                            + AGREGAR JUGADA ({selectedNumbers.size} números)
                         </button>
 
                         {/* Botón para volver a la lista de sorteos */}
