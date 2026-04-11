@@ -33,7 +33,7 @@ export const getDraws = async (req: Request, res: Response) => {
             SELECT 
                 d.id,
                 d.lottery_type,
-                d.draw_date,
+                TO_CHAR(d.draw_date, 'YYYY-MM-DD') as draw_date,
                 d.draw_time,
                 d.status,
                 d.winning_number,
@@ -49,7 +49,6 @@ export const getDraws = async (req: Request, res: Response) => {
         const params: any[] = [];
 
         if (date) {
-            // La fecha viene en formato YYYY-MM-DD (Costa Rica)
             params.push(date);
             query += ` AND d.draw_date = $${params.length}`;
         } else if (status === 'ACTIVE') {
@@ -61,14 +60,7 @@ export const getDraws = async (req: Request, res: Response) => {
 
         const result = await pool.query(query, params);
         
-        // Convertir draw_date a string ISO sin modificar (ya es DATE en BD)
-        // El frontend se encargará de formatear con la zona horaria correcta
-        const rows = result.rows.map(row => ({
-            ...row,
-            draw_date: row.draw_date ? row.draw_date.toISOString().split('T')[0] : null
-        }));
-        
-        res.json(rows);
+        res.json(result.rows);
     } catch (error) {
         console.error('Error fetching draws:', error);
         res.status(500).json({ error: 'Internal server error' });
