@@ -18,6 +18,7 @@ interface Recharge {
   source_phone?: string;
   source_name?: string;
   third_party_alert?: boolean;
+  ocr_texto_completo?: string;
 }
 
 export default function AdminRechargesPage() {
@@ -25,6 +26,7 @@ export default function AdminRechargesPage() {
   const [loading, setLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
   const [approvedReceipts, setApprovedReceipts] = useState<Record<string, any>>({});
+  const [showOcrText, setShowOcrText] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -189,16 +191,24 @@ export default function AdminRechargesPage() {
                 </div>
 
                 {/* Botones */}
-                <div className="flex gap-3">
+                <div className="flex gap-2 flex-wrap">
+                  {r.ocr_texto_completo && (
+                    <button
+                      onClick={() => setShowOcrText(r.ocr_texto_completo)}
+                      className="py-2 px-3 bg-blue-500/20 border border-blue-500/30 text-blue-400 rounded-xl text-[10px] font-black hover:bg-blue-500/30 transition-all"
+                    >
+                      📄 Ver texto OCR
+                    </button>
+                  )}
                   <button
                     onClick={() => handleReject(r)}
-                    className="flex-1 py-2 md:py-3 bg-red-500/10 border border-red-500/20 text-red-500 font-black rounded-xl hover:bg-red-500/20 transition-all active:scale-95 uppercase text-[10px] md:text-xs"
+                    className="py-2 px-3 bg-red-500/10 border border-red-500/20 text-red-500 font-black rounded-xl hover:bg-red-500/20 transition-all active:scale-95 uppercase text-[10px]"
                   >
                     Rechazar
                   </button>
                   <button
                     onClick={() => handleApprove(r)}
-                    className="flex-1 py-2 md:py-3 bg-emerald-500 text-white font-black rounded-xl hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20 active:scale-95 uppercase text-[10px] md:text-xs"
+                    className="py-2 px-3 bg-emerald-500 text-white font-black rounded-xl hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20 active:scale-95 uppercase text-[10px]"
                   >
                     Aprobar
                   </button>
@@ -206,13 +216,34 @@ export default function AdminRechargesPage() {
                     <PrintButton
                       ticket={approvedReceipts[r.id]}
                       label="Recibo"
-                      className="py-2 md:py-3 px-3 md:px-4 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-xl text-[10px] md:text-xs"
+                      className="py-2 px-3 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-xl text-[10px]"
                     />
                   )}
                 </div>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Modal para ver el texto OCR */}
+      {showOcrText && (
+        <div 
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowOcrText(null)}
+        >
+          <div className="max-w-2xl max-h-[80vh] overflow-auto bg-gray-900 rounded-2xl p-4">
+            <h3 className="text-white font-black mb-3">📄 Texto extraído del comprobante</h3>
+            <pre className="text-gray-300 text-xs whitespace-pre-wrap font-mono bg-black/50 p-3 rounded-xl">
+              {showOcrText}
+            </pre>
+            <button 
+              onClick={() => setShowOcrText(null)}
+              className="mt-4 w-full py-2 bg-red-600 rounded-xl text-white font-bold"
+            >
+              Cerrar
+            </button>
+          </div>
         </div>
       )}
     </div>
