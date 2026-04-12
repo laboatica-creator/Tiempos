@@ -1,4 +1,19 @@
-/* Estilos para inputs de tipo date - calendario visible */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 15, 23, 42;
+  --background-end-rgb: 15, 23, 42;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(to bottom, transparent, rgb(var(--background-end-rgb))) rgb(var(--background-start-rgb));
+}
+
+/* Calendario */
 input[type="date"] {
     color-scheme: dark;
     background-color: #1e293b;
@@ -9,22 +24,11 @@ input[type="date"] {
     cursor: pointer;
 }
 
-/* Ícono del calendario - color celeste (Chrome, Edge) */
 input[type="date"]::-webkit-calendar-picker-indicator {
-    background-color: #3b82f6 !important;
-    padding: 8px !important;
-    border-radius: 8px !important;
-    cursor: pointer !important;
-    filter: invert(100%) !important;
-    opacity: 1 !important;
+    filter: invert(1);
+    cursor: pointer;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator:hover {
-    background-color: #60a5fa !important;
     transform: scale(1.05);
-}
-
-/* Para Firefox */
-input[type="date"] {
-    color-scheme: dark;
 }
