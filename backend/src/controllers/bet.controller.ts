@@ -19,9 +19,33 @@ export const placeBet = async (req: AuthRequest, res: Response) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Verificar sorteo
-        const drawRes = await client.query(`SELECT status, draw_date, draw_time, lottery_type FROM draws WHERE id = $1 FOR SHARE`, [draw_id]);
-        if (drawRes.rows.length === 0 || drawRes.rows[0].status !== 'OPEN') {
+        // 1. Verificar sorteo y validar horario de cierre (20 minutos antes)
+        const drawRes = await client.query(
+            `SELECT status, draw_date, draw_time, lottery_type FROM draws WHERE id = $1 FOR SHARE`, 
+            [draw_id]
+        );
+        
+        if (drawRes.rows.length === 0) {
+            throw new Error('Sorteo no encontrado.');
+        }
+        
+        const draw = drawRes.rows[0];
+        
+        // 🔥 VALIDACIÓN: Cierre de apuestas 20 minutos antes del sorteo
+        const drawDateTime = new Date(`${draw.draw_date}T${draw.draw_time}:00`);
+        const closeTime = new Date(drawDateTime.getTime() - 20 * 60 * 1000);
+        const now = new Date();
+        
+        console.log(`[BET] Sorteo: ${draw.lottery_type} - ${draw.draw_time}`);
+        console.log(`[BET] Hora actual: ${now.toLocaleTimeString('es-CR')}`);
+        console.log(`[BET] Cierre de apuestas: ${closeTime.toLocaleTimeString('es-CR')}`);
+        
+        if (now > closeTime) {
+            const closeTimeStr = closeTime.toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
+            throw new Error(`⏰ Las apuestas para este sorteo se cierran 20 minutos antes (a las ${closeTimeStr}). El horario límite ya pasó.`);
+        }
+        
+        if (draw.status !== 'OPEN') {
             throw new Error('El sorteo no está abierto para apuestas.');
         }
 
@@ -188,7 +212,6 @@ export const cancelBet = async (req: AuthRequest, res: Response) => {
 };
 
 export const getNumberExposure = async (req: Request, res: Response) => {
-    // ... logic remains similar, ideally fetching from draw_exposure
     const { draw_id } = req.params;
     try {
         const result = await pool.query(`SELECT number, current_exposure FROM draw_exposure WHERE draw_id = $1`, [draw_id]);
