@@ -4,6 +4,8 @@ import jwt from 'jsonwebtoken';
 import { pool } from '../index';
 import { sendWelcomeEmail, sendPasswordRecoveryEmail } from '../services/email.service';
 import { applyNewUserBonus } from '../services/promotion.service';
+import { v4 as uuidv4 } from 'uuid';
+import { AuthRequest } from '../middlewares/auth.middleware';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkey_tiempos_prod_2026';
 
@@ -130,6 +132,13 @@ export const loginUser = async (req: Request, res: Response) => {
             return res.status(401).json({ error: 'Credenciales inválidas.' });
         }
 
+        // 🔥 Verificar si ya hay una sesión activa en otro dispositivo
+        if (user.session_token) {
+            return res.status(401).json({ 
+                error: '⚠️ Ya hay una sesión activa en otro dispositivo. Cierre sesión allí primero.' 
+            });
+        }
+
         // Generate JWT
         const token = jwt.sign(
             { 
@@ -142,6 +151,13 @@ export const loginUser = async (req: Request, res: Response) => {
             }, 
             JWT_SECRET, 
             { expiresIn: '24h' }
+        );
+
+        // 🔥 Generar session_token único y guardar en BD
+        const sessionToken = uuidv4();
+        await pool.query(
+            `UPDATE users SET session_token = $1, session_created_at = NOW() WHERE id = $2`,
+            [sessionToken, user.id]
         );
 
         res.json({
@@ -160,6 +176,20 @@ export const loginUser = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ error: 'Error interno del servidor al iniciar sesión.' });
+    }
+};
+
+export const logoutUser = async (req: AuthRequest, res: Response) => {
+    const userId = req.user?.id;
+    try {
+        await pool.query(
+            `UPDATE users SET session_token = NULL, session_created_at = NULL WHERE id = $1`,
+            [userId]
+        );
+        res.json({ message: 'Sesión cerrada correctamente' });
+    } catch (error) {
+        console.error('Logout error:', error);
+        res.status(500).json({ error: 'Error al cerrar sesión' });
     }
 };
 
