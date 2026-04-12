@@ -97,7 +97,7 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
         
         if (necesitaPassword) {
             const adminCheck = await client.query(
-                `SELECT password FROM users WHERE id = $1 AND role IN ('ADMIN', 'MASTER_ADMIN')`,
+                `SELECT password_hash FROM users WHERE id = $1 AND role IN ('ADMIN', 'MASTER_ADMIN')`,
                 [userId]
             );
             
@@ -105,7 +105,7 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
                 return res.status(403).json({ error: 'No autorizado. Solo administradores.' });
             }
             
-            const isValidPassword = await bcrypt.compare(admin_password, adminCheck.rows[0].password);
+            const isValidPassword = await bcrypt.compare(admin_password, adminCheck.rows[0].password_hash);
             if (!isValidPassword) {
                 return res.status(403).json({ error: 'Contraseña de administrador incorrecta.' });
             }
