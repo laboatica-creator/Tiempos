@@ -185,12 +185,12 @@ export const getWalletTransactions = async (req: AuthRequest, res: Response) => 
     try {
         const userId = req.user?.id;
         const query = `
-            SELECT t.id, t.amount, t.type, t.status, t.created_at, t.details FROM (
-                (SELECT id::text, amount, 'DEPÓSITO' as type, status, created_at, reference_number as details FROM sinpe_deposits WHERE user_id = $1)
+            SELECT t.id, t.amount, t.type, t.status, t.created_at, t.details, t.ocr_texto_completo FROM (
+                (SELECT id::text, amount, 'DEPÓSITO' as type, status, created_at, reference_number as details, ocr_texto_completo FROM sinpe_deposits WHERE user_id = $1)
                 UNION ALL
-                (SELECT id::text, amount, 'RETIRO' as type, status, created_at, details FROM withdrawal_requests WHERE user_id = $1)
+                (SELECT id::text, amount, 'RETIRO' as type, status, created_at, details, NULL as ocr_texto_completo FROM withdrawal_requests WHERE user_id = $1)
                 UNION ALL
-                (SELECT wt.id::text, wt.amount, wt.type::text, 'COMPLETED' as status, wt.created_at, wt.description as details 
+                (SELECT wt.id::text, wt.amount, wt.type::text, 'COMPLETED' as status, wt.created_at, wt.description as details, NULL as ocr_texto_completo 
                  FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id = w.id WHERE w.user_id = $1)
             ) t ORDER BY t.created_at DESC LIMIT 50
         `;
