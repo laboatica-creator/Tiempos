@@ -46,10 +46,8 @@ export default function BettingPage() {
 
     useEffect(() => {
         if (selectedLottery && draws.length > 0) {
-            // Obtener fecha actual en Costa Rica
             const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
             
-            // Filtrar sorteos desde hoy hasta 7 días después
             const maxDate = new Date();
             maxDate.setDate(maxDate.getDate() + 7);
             const maxDateStr = maxDate.toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
@@ -80,7 +78,6 @@ export default function BettingPage() {
     }, [selectedDate, selectedLottery, draws]);
 
     useEffect(() => {
-        // Resetear cuando cambia la lotería
         setSelectedDraw(null);
         setShowNumberGrid(false);
         setSelectedNumbers(new Set());
@@ -176,7 +173,6 @@ export default function BettingPage() {
         try {
             const token = sessionStorage.getItem('token');
             
-            // Agrupar apuestas por sorteo
             const groupedByDraw: { [key: string]: { draw_id: string; bets: { number: string; amount: number }[] } } = {};
             
             cart.forEach(item => {
@@ -357,7 +353,7 @@ export default function BettingPage() {
                             </div>
                         </div>
 
-                        {/* Parrilla de números 00-99 (7 columnas) */}
+                        {/* Parrilla de números 00-99 (7 columnas) - NÚMEROS MÁS GRANDES */}
                         <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6">
                             <div className="flex justify-between items-center mb-4">
                                 <h2 className="text-white font-black uppercase text-sm">Selecciona números (00-99)</h2>
@@ -368,7 +364,7 @@ export default function BettingPage() {
                                     Limpiar todo
                                 </button>
                             </div>
-                            <div className="grid grid-cols-7 gap-1">
+                            <div className="grid grid-cols-7 gap-1.5">
                                 {Array.from({ length: 100 }, (_, i) => {
                                     const num = i.toString().padStart(2, '0');
                                     const isSelected = selectedNumbers.has(num);
@@ -376,10 +372,10 @@ export default function BettingPage() {
                                         <button
                                             key={num}
                                             onClick={() => handleNumberClick(num)}
-                                            className={`aspect-square rounded-lg text-sm font-black transition-all ${
+                                            className={`flex items-center justify-center rounded-xl text-xl md:text-2xl font-black transition-all py-3 md:py-4 ${
                                                 isSelected
-                                                    ? 'bg-emerald-500 text-white'
-                                                    : 'bg-black/40 text-gray-400 hover:bg-white/10'
+                                                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                                                    : 'bg-black/40 text-gray-300 hover:bg-white/10 hover:text-white border border-white/5'
                                             }`}
                                         >
                                             {num}
