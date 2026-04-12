@@ -119,13 +119,27 @@ export default function WalletPage() {
         reader.readAsDataURL(file);
         
         // Extraer datos con OCR
-        const datos = await extraerDatos(file, userPhone);
+        const datos = await extraerDatos(file);
         if (datos) {
             setOcrData(datos);
             
             // Pre-llenar el formulario
             if (datos.referencia) setSinpeReference(datos.referencia);
             if (datos.monto && datos.monto > 0) setSinpeAmount(datos.monto.toString());
+            
+            // 🔥 Seleccionar el banco automáticamente según el OCR
+            if (datos.bancoOrigen) {
+                const bancoEncontrado = publicMethods.find(m => 
+                    m.name.toLowerCase() === datos.bancoOrigen.toLowerCase() ||
+                    m.name.toLowerCase().includes(datos.bancoOrigen.toLowerCase())
+                );
+                if (bancoEncontrado) {
+                    setSelectedSinpeBank(bancoEncontrado.name);
+                    console.log('✅ Banco seleccionado automáticamente:', bancoEncontrado.name);
+                } else {
+                    console.log('⚠️ Banco no encontrado en la lista:', datos.bancoOrigen);
+                }
+            }
             
             // Verificar si el teléfono del comprobante coincide con el teléfono registrado
             const telefonoLimpio = datos.telefonoOrigen.replace(/\D/g, '');
@@ -167,7 +181,7 @@ export default function WalletPage() {
                 source_phone: sourcePhone,
                 source_name: sourceName,
                 third_party_alert: thirdPartyAlert,
-                comprobante_image: imagenComprobante  // 🔥 Enviar la imagen al backend
+                comprobante_image: imagenComprobante
             }, token);
             
             if (res.error) {
