@@ -1,88 +1,37 @@
-@import "tailwindcss";
-
-@theme {
-  --color-background: #0f172a;
-  --color-foreground: #f8fafc;
-  --color-primary: #10b981;
-  --color-primary-dark: #059669;
-  --color-secondary: #3b82f6;
-  --color-accent: #f59e0b;
-  --color-limit-low: #22c55e;
-  --color-limit-med: #eab308;
-  --color-limit-high: #ef4444;
+/* Estilos para inputs de tipo date - calendario visible */
+input[type="date"] {
+    color-scheme: dark;
+    background-color: #1e293b;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+    cursor: pointer;
 }
 
-body {
-  color: var(--color-foreground);
-  background: var(--color-background);
-  font-family: Arial, Helvetica, sans-serif;
-  overflow-x: hidden;
+/* Ícono del calendario - fondo celeste con ícono blanco */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    background-color: #3b82f6 !important;
+    padding: 10px !important;
+    border-radius: 8px !important;
+    cursor: pointer !important;
+    filter: invert(1) !important;
+    opacity: 1 !important;
 }
 
-@layer components {
-  .btn-primary {
-    @apply bg-primary hover:bg-primary-dark text-white font-bold py-3 px-6 rounded-lg transition-transform transform active:scale-95 shadow-lg shadow-primary/30;
-  }
-  
-  .glass-panel {
-    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl shadow-xl;
-  }
-
-  .number-btn {
-    @apply w-12 h-12 flex items-center justify-center rounded-xl text-lg font-bold border-2 transition-all cursor-pointer hover:scale-105 active:scale-95 text-white shadow-md;
-  }
-  
-  .number-low {
-    @apply bg-limit-low/20 border-limit-low hover:bg-limit-low/40 shadow-limit-low/20;
-  }
-  
-  .number-med {
-    @apply bg-limit-med/20 border-limit-med hover:bg-limit-med/40 shadow-limit-med/20;
-  }
-  
-  .number-high {
-    @apply bg-limit-high/80 border-limit-high cursor-not-allowed hover:scale-100 opacity-50;
-  }
-  
-  .number-selected {
-    @apply ring-4 ring-white animate-pulse;
-  }
-
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-  .scrollbar-hide {
-    -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none; /* Firefox */
-  }
-
-  .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-
-  * {
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  @keyframes bounce-short {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-3px); }
-  }
-  .animate-bounce-short {
-    animation: bounce-short 1s ease-in-out infinite;
-  }
-}
-@keyframes marquee {
-  0% {
-    transform: translateX(100%);
-  }
-  100% {
-    transform: translateX(-100%);
-  }
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    background-color: #2563eb !important;
+    transform: scale(1.05);
 }
 
-.animate-marquee {
-  animation: marquee 8s linear infinite;
-  display: flex;
-  gap: 2rem;
+/* Para Firefox - usar fondo diferente */
+input[type="date"] {
+    color-scheme: dark;
+}
+
+/* Para Edge */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    background-color: #3b82f6;
+    border-radius: 8px;
+    padding: 8px;
 }
