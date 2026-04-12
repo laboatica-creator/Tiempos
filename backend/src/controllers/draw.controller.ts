@@ -97,7 +97,7 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
         
         if (necesitaPassword) {
             const adminCheck = await client.query(
-                `SELECT password_hash FROM users WHERE id = $1 AND role IN ('ADMIN', 'MASTER_ADMIN')`,
+                `SELECT password_hash FROM users WHERE id = $1 AND role = 'ADMIN'`,
                 [userId]
             );
             
