@@ -25,6 +25,7 @@ export default function WalletPage() {
     const [userPhone, setUserPhone] = useState('');
     const [showOcrAlert, setShowOcrAlert] = useState(false);
     const [ocrData, setOcrData] = useState<DatosComprobante | null>(null);
+    const [imagenComprobante, setImagenComprobante] = useState<string>('');
     const fileInputRef = useRef<HTMLInputElement>(null);
     
     // Filtros para historial
@@ -110,6 +111,14 @@ export default function WalletPage() {
         const file = e.target.files?.[0];
         if (!file) return;
         
+        // Convertir imagen a base64 para enviar al backend
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setImagenComprobante(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+        
+        // Extraer datos con OCR
         const datos = await extraerDatos(file, userPhone);
         if (datos) {
             setOcrData(datos);
@@ -157,7 +166,8 @@ export default function WalletPage() {
                 bank_name: selectedSinpeBank,
                 source_phone: sourcePhone,
                 source_name: sourceName,
-                third_party_alert: thirdPartyAlert
+                third_party_alert: thirdPartyAlert,
+                comprobante_image: imagenComprobante  // 🔥 Enviar la imagen al backend
             }, token);
             
             if (res.error) {
@@ -170,6 +180,7 @@ export default function WalletPage() {
                 }
                 setSinpeAmount('');
                 setSinpeReference('');
+                setImagenComprobante('');
                 setShowOcrAlert(false);
                 setOcrData(null);
                 fetchWalletData();
@@ -305,6 +316,11 @@ export default function WalletPage() {
                         )}
                         {ocrError && (
                             <p className="text-red-400 text-[10px] mt-1">{ocrError}</p>
+                        )}
+                        {imagenComprobante && (
+                            <div className="mt-2">
+                                <p className="text-emerald-400 text-[10px]">✅ Comprobante cargado</p>
+                            </div>
                         )}
                     </div>
                     
