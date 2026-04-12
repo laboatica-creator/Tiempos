@@ -27,21 +27,8 @@ export function useComprobanteOCR() {
         setError(null);
         
         try {
-            // Crear worker con configuración optimizada para números
-            const worker = await Tesseract.createWorker('spa', 1, {
-                logger: (m) => {
-                    if (m.status === 'recognizing text') {
-                        setProgress(Math.round(m.progress * 100));
-                    }
-                }
-            });
-            
-            // Configurar para mejor reconocimiento de números
-            await worker.setParameters({
-                tessedit_pageseg_mode: '6', // Bloque de texto uniforme
-                tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÑáéíóúñ-.:/()$€₡ ',
-                preserve_interword_spaces: '1'
-            });
+            // Crear worker
+            const worker = await Tesseract.createWorker('spa');
             
             const result = await worker.recognize(file);
             await worker.terminate();
@@ -59,8 +46,8 @@ export function useComprobanteOCR() {
                 /Documento\s*(\d+)/i,
                 /Referencia:\s*(\d+)/i,
                 /Referencia\s*(\d+)/i,
-                /\b(\d{20,})\b/,  // Número muy largo (20+ dígitos)
-                /\b(\d{8,15})\b/   // 8-15 dígitos
+                /\b(\d{20,})\b/,
+                /\b(\d{8,15})\b/
             ];
             for (const pattern of refPatterns) {
                 const match = texto.match(pattern);
@@ -93,82 +80,47 @@ export function useComprobanteOCR() {
             const fechaMatch = texto.match(/(\d{2}\/\d{2}\/\d{4})/);
             if (fechaMatch) fecha = fechaMatch[1];
             
-            // === TELÉFONO EMISOR (Quien envía el dinero) ===
+            // === TELÉFONO EMISOR ===
             let telefonoEmisor = '';
-            // Buscar "Número de monedero:" que es el teléfono del emisor
-            const telEmisorPatterns = [
-                /Número de monedero:\s*(\d+)/i,
-                /Monedero:\s*(\d+)/i,
-                /Teléfono:\s*(\d+)/i
-            ];
-            for (const pattern of telEmisorPatterns) {
-                const match = texto.match(pattern);
-                if (match && match[1]) {
-                    telefonoEmisor = match[1];
-                    break;
-                }
+            const telEmisorMatch = texto.match(/Número de monedero:\s*(\d+)/i);
+            if (telEmisorMatch) {
+                telefonoEmisor = telEmisorMatch[1];
             }
-            // Si no encontró, buscar cualquier número de 8 dígitos cerca de "Realizado por"
             if (!telefonoEmisor) {
                 const realizadoMatch = texto.match(/Realizado por:[\s\S]*?(\d{8})/i);
                 if (realizadoMatch) telefonoEmisor = realizadoMatch[1];
             }
             
-            // === TELÉFONO RECEPTOR (Quien recibe el dinero) ===
+            // === TELÉFONO RECEPTOR ===
             let telefonoReceptor = '';
-            const telReceptorPatterns = [
-                /SINPE Móvil destino\s*(\d{4}[-]?\d{4})/i,
-                /Destinatario:\s*(?:\D*?)(\d{8})/i,
-                /Beneficiario:\s*(?:\D*?)(\d{8})/i
-            ];
-            for (const pattern of telReceptorPatterns) {
-                const match = texto.match(pattern);
-                if (match && match[1]) {
-                    telefonoReceptor = match[1].replace(/-/g, '');
-                    break;
-                }
+            const telReceptorMatch = texto.match(/Destinatario:\s*(?:\D*?)(\d{8})/i);
+            if (telReceptorMatch) {
+                telefonoReceptor = telReceptorMatch[1];
+            }
+            if (!telefonoReceptor) {
+                const sinpeMatch = texto.match(/SINPE Móvil destino\s*(\d{4}[-]?\d{4})/i);
+                if (sinpeMatch) telefonoReceptor = sinpeMatch[1].replace(/-/g, '');
             }
             
             // === NOMBRE EMISOR ===
             let nombreEmisor = '';
-            const nombreEmisorPatterns = [
-                /Realizado por:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{5,50})/i,
-                /Ordenante:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{5,50})/i
-            ];
-            for (const pattern of nombreEmisorPatterns) {
-                const match = texto.match(pattern);
-                if (match && match[1]) {
-                    nombreEmisor = match[1].trim();
-                    break;
-                }
+            const nombreEmisorMatch = texto.match(/Realizado por:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{5,50})/i);
+            if (nombreEmisorMatch) {
+                nombreEmisor = nombreEmisorMatch[1].trim();
             }
             
             // === NOMBRE RECEPTOR ===
             let nombreReceptor = '';
-            const nombreReceptorPatterns = [
-                /Destinatario:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{5,50})/i,
-                /Beneficiario:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{5,50})/i
-            ];
-            for (const pattern of nombreReceptorPatterns) {
-                const match = texto.match(pattern);
-                if (match && match[1]) {
-                    nombreReceptor = match[1].trim();
-                    break;
-                }
+            const nombreReceptorMatch = texto.match(/Destinatario:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{5,50})/i);
+            if (nombreReceptorMatch) {
+                nombreReceptor = nombreReceptorMatch[1].trim();
             }
             
             // === CONCEPTO ===
             let concepto = '';
-            const conceptPatterns = [
-                /Concepto:\s*(.+?)(?:\n|$)/i,
-                /Motivo:\s*(.+?)(?:\n|$)/i
-            ];
-            for (const pattern of conceptPatterns) {
-                const match = texto.match(pattern);
-                if (match && match[1]) {
-                    concepto = match[1].trim();
-                    break;
-                }
+            const conceptMatch = texto.match(/Concepto:\s*(.+?)(?:\n|$)/i);
+            if (conceptMatch) {
+                concepto = conceptMatch[1].trim();
             }
             
             // === BANCO DETECTADO ===
