@@ -24,6 +24,11 @@ export default function AdminResultsPage() {
     const [currentTime, setCurrentTime] = useState('');
     const [searchDate, setSearchDate] = useState('');
     const [showDateSearch, setShowDateSearch] = useState(false);
+    const [adminPassword, setAdminPassword] = useState('');
+    const [correctionReason, setCorrectionReason] = useState('');
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [currentDrawForAction, setCurrentDrawForAction] = useState<Draw | null>(null);
+    const [isCorrection, setIsCorrection] = useState(false);
 
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
     const [filterDate, setFilterDate] = useState(today);
@@ -65,7 +70,36 @@ export default function AdminResultsPage() {
         }
     };
 
-    const handleSetWinner = async (draw: Draw) => {
+    const openWinnerModal = (draw: Draw) => {
+        const esCorreccion = draw.winning_number !== null;
+        setIsCorrection(esCorreccion);
+        setCurrentDrawForAction(draw);
+        setWinningNumber('');
+        setAdminPassword('');
+        setCorrectionReason('');
+        
+        if (esCorreccion) {
+            setShowPasswordModal(true);
+        } else {
+            // Verificar si está fuera de horario (después de 1 hora)
+            const ahora = new Date();
+            const horaSorteo = new Date(`${draw.draw_date}T${draw.draw_time}:00`);
+            const horaGracia = new Date(horaSorteo.getTime() + 60 * 60 * 1000);
+            const fueraDeTiempo = ahora > horaGracia;
+            
+            if (fueraDeTiempo) {
+                setShowPasswordModal(true);
+            } else {
+                // Dentro de horario, mostrar input de número directamente
+                setSelectedDrawId(draw.id);
+                setWinningNumber('');
+            }
+        }
+    };
+
+    const handleSetWinner = async () => {
+        if (!currentDrawForAction) return;
+        
         if (!winningNumber || winningNumber.length !== 2) {
             setMessage({ type: 'error', text: 'Ingrese un número de 2 dígitos (00-99)' });
             return;
@@ -76,21 +110,27 @@ export default function AdminResultsPage() {
 
         try {
             const token = sessionStorage.getItem('token');
-            const response = await api.post('/admin/draws/set-winner', {
-                draw_id: draw.id,
-                winning_number: winningNumber
+            const response = await api.post(`/admin/draws/set-winner/${currentDrawForAction.id}`, {
+                winning_number: winningNumber,
+                admin_password: adminPassword,
+                is_correction: isCorrection,
+                reason: correctionReason
             }, token);
 
             if (response.error) {
                 setMessage({ type: 'error', text: response.error });
             } else {
-                setMessage({ type: 'success', text: `✅ Número ganador ${winningNumber} registrado para ${draw.lottery_type} - ${draw.draw_time}` });
+                setMessage({ type: 'success', text: response.message || `✅ Número ganador ${winningNumber} registrado` });
                 setWinningNumber('');
                 setSelectedDrawId(null);
+                setShowPasswordModal(false);
+                setCurrentDrawForAction(null);
+                setAdminPassword('');
+                setCorrectionReason('');
                 fetchDraws();
             }
         } catch (err) {
-            setMessage({ type: 'error', text: 'Error al registrar el número ganador' });
+            setMessage({ type: 'error', text: 'Error al registrar el número' });
         } finally {
             setSubmitting(false);
         }
@@ -129,7 +169,6 @@ export default function AdminResultsPage() {
         }
     };
 
-    // Separar sorteos por tipo
     const ticaDraws = draws.filter(d => d.lottery_type === 'TICA').sort((a, b) => a.draw_time.localeCompare(b.draw_time));
     const nicaDraws = draws.filter(d => d.lottery_type === 'NICA').sort((a, b) => a.draw_time.localeCompare(b.draw_time));
 
@@ -146,14 +185,12 @@ export default function AdminResultsPage() {
                         : 'border-yellow-500/30 bg-yellow-500/5'
                 }`}
             >
-                {/* Marca de agua - Bandera */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none">
                     <span className="text-8xl">
                         {draw.lottery_type === 'TICA' ? '🇨🇷' : '🇳🇮'}
                     </span>
                 </div>
 
-                {/* Contenido del cuadro */}
                 <div className="relative z-10">
                     <div className="flex justify-between items-center mb-3">
                         <div>
@@ -161,6 +198,7 @@ export default function AdminResultsPage() {
                                 {draw.lottery_type === 'TICA' ? '🇨🇷 TICA' : '🇳🇮 NICA'}
                             </p>
                             <p className="text-gray-400 text-sm font-bold">{draw.draw_time}</p>
+                            <p className="text-gray-500 text-xs">{formatDrawDate(draw.draw_date)}</p>
                         </div>
                         {hasWinner && (
                             <div className="text-right">
@@ -179,10 +217,7 @@ export default function AdminResultsPage() {
 
                     {!hasWinner && !isExpanded && (
                         <button
-                            onClick={() => {
-                                setSelectedDrawId(draw.id);
-                                setWinningNumber('');
-                            }}
+                            onClick={() => openWinnerModal(draw)}
                             className="w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-xl text-white font-bold text-sm"
                         >
                             Ingresar Número Ganador
@@ -208,7 +243,10 @@ export default function AdminResultsPage() {
                                     Cancelar
                                 </button>
                                 <button
-                                    onClick={() => handleSetWinner(draw)}
+                                    onClick={() => {
+                                        setCurrentDrawForAction(draw);
+                                        handleSetWinner();
+                                    }}
                                     disabled={submitting || !winningNumber}
                                     className="flex-1 py-2 bg-emerald-600 rounded-xl text-white font-bold text-sm disabled:opacity-50"
                                 >
@@ -218,14 +256,25 @@ export default function AdminResultsPage() {
                         </div>
                     )}
 
-                    {hasWinner && !isSettled && (
-                        <button
-                            onClick={() => handleLiquidate(draw)}
-                            disabled={submitting}
-                            className="w-full mt-3 py-2 bg-gradient-to-r from-blue-600 to-blue-500 rounded-xl text-white font-bold text-sm"
-                        >
-                            Liquidar Premios →
-                        </button>
+                    {hasWinner && (
+                        <div className="flex gap-3 mt-3">
+                            <button
+                                onClick={() => openWinnerModal(draw)}
+                                disabled={submitting}
+                                className="flex-1 py-2 bg-yellow-500/20 border border-yellow-500/50 text-yellow-400 rounded-xl font-bold text-sm"
+                            >
+                                ✏️ Modificar
+                            </button>
+                            {!isSettled && (
+                                <button
+                                    onClick={() => handleLiquidate(draw)}
+                                    disabled={submitting}
+                                    className="flex-1 py-2 bg-gradient-to-r from-blue-600 to-blue-500 rounded-xl text-white font-bold text-sm"
+                                >
+                                    Liquidar Premios
+                                </button>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>
@@ -243,7 +292,6 @@ export default function AdminResultsPage() {
     return (
         <main className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-4">
             <div className="max-w-6xl mx-auto">
-                {/* Header */}
                 <div className="flex justify-between items-center mb-6 p-4 bg-white/5 rounded-2xl">
                     <div>
                         <h1 className="text-white text-2xl font-black">🎰 Liquidación de Sorteos</h1>
@@ -255,7 +303,6 @@ export default function AdminResultsPage() {
                     </div>
                 </div>
 
-                {/* Mensajes */}
                 {message && (
                     <div className={`mb-6 p-4 rounded-2xl ${
                         message.type === 'success' 
@@ -266,7 +313,6 @@ export default function AdminResultsPage() {
                     </div>
                 )}
 
-                {/* Selector de fecha */}
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6">
                     <button
                         onClick={() => setShowDateSearch(!showDateSearch)}
@@ -300,15 +346,12 @@ export default function AdminResultsPage() {
                     )}
                 </div>
 
-                {/* Fecha actual mostrada */}
                 <div className="text-center mb-6">
                     <p className="text-gray-400 text-sm">Mostrando sorteos del:</p>
                     <p className="text-white font-black text-2xl">{formatDrawDate(filterDate)}</p>
                 </div>
 
-                {/* Dos columnas: TICA y NICA */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Columna TICA */}
                     <div>
                         <div className="flex items-center gap-2 mb-4 pb-2 border-b border-white/10">
                             <span className="text-3xl">🇨🇷</span>
@@ -326,7 +369,6 @@ export default function AdminResultsPage() {
                         </div>
                     </div>
 
-                    {/* Columna NICA */}
                     <div>
                         <div className="flex items-center gap-2 mb-4 pb-2 border-b border-white/10">
                             <span className="text-3xl">🇳🇮</span>
@@ -345,11 +387,73 @@ export default function AdminResultsPage() {
                     </div>
                 </div>
 
-                {/* Footer */}
                 <div className="text-center mt-8 pt-4 border-t border-white/10">
                     <p className="text-gray-600 text-xs">© 2026 Tiempos Pro. Todos los derechos reservados.</p>
                 </div>
             </div>
+
+            {/* Modal para contraseña (corrección o fuera de horario) */}
+            {showPasswordModal && currentDrawForAction && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+                    <div className="bg-[#1e293b] rounded-2xl p-6 max-w-md w-full">
+                        <h3 className="text-white font-black text-lg mb-4">
+                            {isCorrection ? '✏️ Modificar Número Ganador' : '⚠️ Fuera de Horario'}
+                        </h3>
+                        <p className="text-gray-300 text-sm mb-4">
+                            {isCorrection 
+                                ? `Sorteo: ${currentDrawForAction.lottery_type} - ${currentDrawForAction.draw_time}\nNúmero actual: ${currentDrawForAction.winning_number}`
+                                : `El horario de gracia (1 hora después del sorteo) ha expirado. Ingrese su contraseña de administrador.`
+                            }
+                        </p>
+                        {isCorrection && (
+                            <input
+                                type="text"
+                                placeholder="Motivo de la corrección"
+                                value={correctionReason}
+                                onChange={(e) => setCorrectionReason(e.target.value)}
+                                className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white mb-3"
+                            />
+                        )}
+                        <input
+                            type="password"
+                            placeholder="Contraseña de administrador"
+                            value={adminPassword}
+                            onChange={(e) => setAdminPassword(e.target.value)}
+                            className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white mb-4"
+                            autoFocus
+                        />
+                        <input
+                            type="text"
+                            maxLength={2}
+                            placeholder="Número ganador (00-99)"
+                            value={winningNumber}
+                            onChange={(e) => setWinningNumber(e.target.value.replace(/[^0-9]/g, ''))}
+                            className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-center text-2xl font-black mb-4"
+                        />
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => {
+                                    setShowPasswordModal(false);
+                                    setCurrentDrawForAction(null);
+                                    setAdminPassword('');
+                                    setWinningNumber('');
+                                    setCorrectionReason('');
+                                }}
+                                className="flex-1 py-2 bg-white/10 rounded-xl text-gray-400"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleSetWinner}
+                                disabled={submitting || !winningNumber || !adminPassword || (isCorrection && !correctionReason)}
+                                className="flex-1 py-2 bg-emerald-600 rounded-xl text-white font-bold disabled:opacity-50"
+                            >
+                                {submitting ? 'Procesando...' : 'Confirmar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }
