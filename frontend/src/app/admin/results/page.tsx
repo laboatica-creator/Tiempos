@@ -17,7 +17,7 @@ interface Draw {
 export default function AdminResultsPage() {
     const [draws, setDraws] = useState<Draw[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedDraw, setSelectedDraw] = useState<Draw | null>(null);
+    const [selectedDrawId, setSelectedDrawId] = useState<string | null>(null);
     const [winningNumber, setWinningNumber] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -25,7 +25,6 @@ export default function AdminResultsPage() {
     const [searchDate, setSearchDate] = useState('');
     const [showDateSearch, setShowDateSearch] = useState(false);
 
-    // Obtener fecha actual en Costa Rica para el filtro inicial
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
     const [filterDate, setFilterDate] = useState(today);
 
@@ -53,7 +52,6 @@ export default function AdminResultsPage() {
             const response = await api.get('/draws', token);
             
             if (Array.isArray(response)) {
-                // Filtrar sorteos por la fecha seleccionada
                 const filtered = response.filter((draw: Draw) => draw.draw_date === filterDate);
                 setDraws(filtered);
             } else if (response.error) {
@@ -67,12 +65,7 @@ export default function AdminResultsPage() {
         }
     };
 
-    const handleSetWinner = async () => {
-        if (!selectedDraw) {
-            setMessage({ type: 'error', text: 'Seleccione un sorteo primero' });
-            return;
-        }
-
+    const handleSetWinner = async (draw: Draw) => {
         if (!winningNumber || winningNumber.length !== 2) {
             setMessage({ type: 'error', text: 'Ingrese un número de 2 dígitos (00-99)' });
             return;
@@ -84,17 +77,17 @@ export default function AdminResultsPage() {
         try {
             const token = sessionStorage.getItem('token');
             const response = await api.post('/admin/draws/set-winner', {
-                draw_id: selectedDraw.id,
+                draw_id: draw.id,
                 winning_number: winningNumber
             }, token);
 
             if (response.error) {
                 setMessage({ type: 'error', text: response.error });
             } else {
-                setMessage({ type: 'success', text: `✅ Número ganador ${winningNumber} registrado para ${selectedDraw.lottery_type} - ${selectedDraw.draw_time}` });
+                setMessage({ type: 'success', text: `✅ Número ganador ${winningNumber} registrado para ${draw.lottery_type} - ${draw.draw_time}` });
                 setWinningNumber('');
-                setSelectedDraw(null);
-                fetchDraws(); // Recargar lista
+                setSelectedDrawId(null);
+                fetchDraws();
             }
         } catch (err) {
             setMessage({ type: 'error', text: 'Error al registrar el número ganador' });
@@ -136,13 +129,121 @@ export default function AdminResultsPage() {
         }
     };
 
-    const pendingDraws = draws.filter(d => !d.winning_number && d.draw_date === filterDate);
-    const settledDraws = draws.filter(d => d.winning_number);
+    // Separar sorteos por tipo
+    const ticaDraws = draws.filter(d => d.lottery_type === 'TICA').sort((a, b) => a.draw_time.localeCompare(b.draw_time));
+    const nicaDraws = draws.filter(d => d.lottery_type === 'NICA').sort((a, b) => a.draw_time.localeCompare(b.draw_time));
+
+    const DrawCard = ({ draw }: { draw: Draw }) => {
+        const isExpanded = selectedDrawId === draw.id;
+        const hasWinner = draw.winning_number !== null;
+        const isSettled = draw.is_settled;
+
+        return (
+            <div 
+                className={`bg-white/5 border rounded-2xl p-4 transition-all relative overflow-hidden ${
+                    hasWinner 
+                        ? 'border-green-500/30 bg-green-500/5' 
+                        : 'border-yellow-500/30 bg-yellow-500/5'
+                }`}
+            >
+                {/* Marca de agua - Bandera */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none">
+                    <span className="text-8xl">
+                        {draw.lottery_type === 'TICA' ? '🇨🇷' : '🇳🇮'}
+                    </span>
+                </div>
+
+                {/* Contenido del cuadro */}
+                <div className="relative z-10">
+                    <div className="flex justify-between items-center mb-3">
+                        <div>
+                            <p className="text-white font-black text-lg">
+                                {draw.lottery_type === 'TICA' ? '🇨🇷 TICA' : '🇳🇮 NICA'}
+                            </p>
+                            <p className="text-gray-400 text-sm font-bold">{draw.draw_time}</p>
+                        </div>
+                        {hasWinner && (
+                            <div className="text-right">
+                                <p className="text-emerald-400 text-2xl font-black">{draw.winning_number}</p>
+                                <p className={`text-xs ${isSettled ? 'text-green-400' : 'text-yellow-400'}`}>
+                                    {isSettled ? 'Liquidado' : 'Por liquidar'}
+                                </p>
+                            </div>
+                        )}
+                        {!hasWinner && (
+                            <span className="text-xs bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded-full">
+                                Pendiente
+                            </span>
+                        )}
+                    </div>
+
+                    {!hasWinner && !isExpanded && (
+                        <button
+                            onClick={() => {
+                                setSelectedDrawId(draw.id);
+                                setWinningNumber('');
+                            }}
+                            className="w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-xl text-white font-bold text-sm"
+                        >
+                            Ingresar Número Ganador
+                        </button>
+                    )}
+
+                    {!hasWinner && isExpanded && (
+                        <div className="space-y-3 mt-2">
+                            <input
+                                type="text"
+                                maxLength={2}
+                                value={winningNumber}
+                                onChange={(e) => setWinningNumber(e.target.value.replace(/[^0-9]/g, ''))}
+                                placeholder="N° (00-99)"
+                                className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-center text-2xl font-black"
+                                autoFocus
+                            />
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setSelectedDrawId(null)}
+                                    className="flex-1 py-2 bg-white/10 rounded-xl text-gray-400 text-sm"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={() => handleSetWinner(draw)}
+                                    disabled={submitting || !winningNumber}
+                                    className="flex-1 py-2 bg-emerald-600 rounded-xl text-white font-bold text-sm disabled:opacity-50"
+                                >
+                                    {submitting ? 'Guardando...' : 'Guardar'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {hasWinner && !isSettled && (
+                        <button
+                            onClick={() => handleLiquidate(draw)}
+                            disabled={submitting}
+                            className="w-full mt-3 py-2 bg-gradient-to-r from-blue-600 to-blue-500 rounded-xl text-white font-bold text-sm"
+                        >
+                            Liquidar Premios →
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-screen bg-[#0f172a]">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500"></div>
+            </div>
+        );
+    }
 
     return (
         <main className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-4">
-            <div className="max-w-4xl mx-auto">
-                {/* Header con hora */}
+            <div className="max-w-6xl mx-auto">
+                {/* Header */}
                 <div className="flex justify-between items-center mb-6 p-4 bg-white/5 rounded-2xl">
                     <div>
                         <h1 className="text-white text-2xl font-black">🎰 Liquidación de Sorteos</h1>
@@ -188,6 +289,7 @@ export default function AdminResultsPage() {
                                     if (searchDate) {
                                         setFilterDate(searchDate);
                                         setShowDateSearch(false);
+                                        setSelectedDrawId(null);
                                     }
                                 }}
                                 className="w-full mt-3 py-3 bg-emerald-600 rounded-xl text-white font-bold"
@@ -199,121 +301,49 @@ export default function AdminResultsPage() {
                 </div>
 
                 {/* Fecha actual mostrada */}
-                <div className="text-center mb-4">
+                <div className="text-center mb-6">
                     <p className="text-gray-400 text-sm">Mostrando sorteos del:</p>
-                    <p className="text-white font-black text-xl">{formatDrawDate(filterDate)}</p>
+                    <p className="text-white font-black text-2xl">{formatDrawDate(filterDate)}</p>
                 </div>
 
-                {/* Sorteos pendientes (sin ganador) */}
-                <div className="mb-8">
-                    <h2 className="text-white font-black uppercase text-sm mb-3 flex items-center gap-2">
-                        <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
-                        Sorteos Pendientes ({pendingDraws.length})
-                    </h2>
-                    
-                    {pendingDraws.length === 0 ? (
-                        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
-                            <p className="text-emerald-400">✅ Todos los sorteos tienen número ganador</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {pendingDraws.map(draw => (
-                                <div key={draw.id} className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                                    <div className="flex justify-between items-center mb-3">
-                                        <div>
-                                            <p className="text-white font-bold">{draw.lottery_type}</p>
-                                            <p className="text-gray-400 text-sm">{draw.draw_time}</p>
-                                        </div>
-                                        <span className="text-xs bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded-full">
-                                            Sin ganador
-                                        </span>
-                                    </div>
-                                    
-                                    {selectedDraw?.id === draw.id ? (
-                                        <div className="space-y-3">
-                                            <input
-                                                type="text"
-                                                maxLength={2}
-                                                value={winningNumber}
-                                                onChange={(e) => setWinningNumber(e.target.value.replace(/[^0-9]/g, ''))}
-                                                placeholder="Número ganador (00-99)"
-                                                className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-center text-2xl font-black"
-                                            />
-                                            <div className="flex gap-3">
-                                                <button
-                                                    onClick={() => setSelectedDraw(null)}
-                                                    className="flex-1 py-2 bg-white/10 rounded-xl text-gray-400"
-                                                >
-                                                    Cancelar
-                                                </button>
-                                                <button
-                                                    onClick={handleSetWinner}
-                                                    disabled={submitting || !winningNumber}
-                                                    className="flex-1 py-2 bg-emerald-600 rounded-xl text-white font-bold disabled:opacity-50"
-                                                >
-                                                    {submitting ? 'Guardando...' : 'Guardar Ganador'}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <button
-                                            onClick={() => {
-                                                setSelectedDraw(draw);
-                                                setWinningNumber('');
-                                            }}
-                                            className="w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-xl text-white font-bold"
-                                        >
-                                            Ingresar Número Ganador
-                                        </button>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* Sorteos ya liquidados (con ganador) */}
-                {settledDraws.length > 0 && (
+                {/* Dos columnas: TICA y NICA */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Columna TICA */}
                     <div>
-                        <h2 className="text-white font-black uppercase text-sm mb-3 flex items-center gap-2">
-                            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                            Sorteos Liquidados ({settledDraws.length})
-                        </h2>
-                        
-                        <div className="space-y-3">
-                            {settledDraws.map(draw => (
-                                <div key={draw.id} className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <p className="text-white font-bold">{draw.lottery_type} - {draw.draw_time}</p>
-                                            <p className="text-emerald-400 text-2xl font-black mt-1">
-                                                {draw.winning_number}
-                                            </p>
-                                        </div>
-                                        <div className="text-right">
-                                            <span className={`text-xs px-3 py-1 rounded-full ${
-                                                draw.is_settled 
-                                                    ? 'bg-green-500/20 text-green-400' 
-                                                    : 'bg-yellow-500/20 text-yellow-400'
-                                            }`}>
-                                                {draw.is_settled ? '✅ Liquidado' : '⚠️ Por liquidar'}
-                                            </span>
-                                            {!draw.is_settled && draw.winning_number && (
-                                                <button
-                                                    onClick={() => handleLiquidate(draw)}
-                                                    disabled={submitting}
-                                                    className="block mt-2 text-xs text-emerald-400 font-bold"
-                                                >
-                                                    Liquidar premios →
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
+                        <div className="flex items-center gap-2 mb-4 pb-2 border-b border-white/10">
+                            <span className="text-3xl">🇨🇷</span>
+                            <h2 className="text-white font-black text-xl uppercase">TICA</h2>
+                            <span className="text-gray-500 text-sm ml-auto">{ticaDraws.length} sorteos</span>
+                        </div>
+                        <div className="space-y-4">
+                            {ticaDraws.length === 0 ? (
+                                <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+                                    <p className="text-gray-400">No hay sorteos TICA para esta fecha</p>
                                 </div>
-                            ))}
+                            ) : (
+                                ticaDraws.map(draw => <DrawCard key={draw.id} draw={draw} />)
+                            )}
                         </div>
                     </div>
-                )}
+
+                    {/* Columna NICA */}
+                    <div>
+                        <div className="flex items-center gap-2 mb-4 pb-2 border-b border-white/10">
+                            <span className="text-3xl">🇳🇮</span>
+                            <h2 className="text-white font-black text-xl uppercase">NICA</h2>
+                            <span className="text-gray-500 text-sm ml-auto">{nicaDraws.length} sorteos</span>
+                        </div>
+                        <div className="space-y-4">
+                            {nicaDraws.length === 0 ? (
+                                <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+                                    <p className="text-gray-400">No hay sorteos NICA para esta fecha</p>
+                                </div>
+                            ) : (
+                                nicaDraws.map(draw => <DrawCard key={draw.id} draw={draw} />)
+                            )}
+                        </div>
+                    </div>
+                </div>
 
                 {/* Footer */}
                 <div className="text-center mt-8 pt-4 border-t border-white/10">
