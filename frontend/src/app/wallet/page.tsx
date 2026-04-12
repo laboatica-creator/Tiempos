@@ -98,7 +98,8 @@ export default function WalletPage() {
         }
         
         try {
-            const res = await api.post('/wallet/deposit/sinpe', {
+            // 🔥 CORREGIDO: endpoint correcto es '/wallet/recharge'
+            const res = await api.post('/wallet/recharge', {
                 amount: Number(sinpeAmount),
                 reference_number: sinpeReference,
                 bank_name: selectedSinpeBank
