@@ -19,7 +19,7 @@ import {
 import { approveRecharge, rejectRecharge, getPendingRecharges, adjustWalletBalance, getPendingWithdrawals, approveWithdrawal } from '../controllers/wallet.controller';
 import { exportDatabase, importDatabase } from '../controllers/backup.controller';
 import { authenticateJWT, requireRole, requirePermission } from '../middlewares/auth.middleware';
-import { setWinningNumber, cancelDraw, getSuggestedResults } from '../controllers/draw.controller';
+import { setWinningNumber, cancelDraw, getSuggestedResults, liquidateDraw } from '../controllers/draw.controller';
 
 const router = Router();
 
@@ -64,6 +64,7 @@ router.post('/backup/import', authenticateJWT, requireRole(['ADMIN']), importDat
 // ========== RUTAS DE SORTEOS ==========
 router.post('/draws/set-winner/:drawId', authenticateJWT, requirePermission('draws'), setWinningNumber);
 router.post('/draws/cancel/:drawId', authenticateJWT, requirePermission('draws'), cancelDraw);
+router.post('/draws/liquidate', authenticateJWT, requirePermission('draws'), liquidateDraw);
 router.get('/draws/suggested-results', authenticateJWT, requirePermission('draws'), getSuggestedResults);
 
 export default router;
