@@ -27,25 +27,23 @@ export function useComprobanteOCR() {
         setError(null);
         
         try {
-            // Crear worker
             const worker = await Tesseract.createWorker('spa');
-            
             const result = await worker.recognize(file);
             await worker.terminate();
             
             const texto = result.data.text;
             console.log('📄 Texto OCR completo:', texto);
             
-            // Limpiar texto para análisis
             const textoLower = texto.toLowerCase();
             
-            // === REFERENCIA ===
+            // === REFERENCIA (Comprobante / Documento) ===
             let referencia = '';
             const refPatterns = [
                 /Comprobante:\s*(\d+)/i,
                 /Documento\s*(\d+)/i,
                 /Referencia:\s*(\d+)/i,
                 /Referencia\s*(\d+)/i,
+                /N°\s*Documento:\s*(\d+)/i,
                 /\b(\d{20,})\b/,
                 /\b(\d{8,15})\b/
             ];
@@ -63,6 +61,8 @@ export function useComprobanteOCR() {
                 /Monto debitado:\s*[₡]?\s*([\d.,]+)/i,
                 /Monto transferencia:\s*[₡]?\s*([\d.,]+)/i,
                 /Monto acreditado:\s*[₡]?\s*([\d.,]+)/i,
+                /Monto:\s*[₡]?\s*([\d.,]+)/i,
+                /Total:\s*[₡]?\s*([\d.,]+)/i,
                 /₡\s*([\d.,]+)/,
                 /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)\s*Colones/i
             ];
@@ -77,74 +77,133 @@ export function useComprobanteOCR() {
             
             // === FECHA ===
             let fecha = '';
-            const fechaMatch = texto.match(/(\d{2}\/\d{2}\/\d{4})/);
-            if (fechaMatch) fecha = fechaMatch[1];
+            const fechaPatterns = [
+                /(\d{2}\/\d{2}\/\d{4})/,
+                /(\d{2}-\d{2}-\d{4})/,
+                /(\d{1,2}\s+de\s+\w+\s+de\s+\d{4})/i
+            ];
+            for (const pattern of fechaPatterns) {
+                const match = texto.match(pattern);
+                if (match && match[1]) {
+                    fecha = match[1];
+                    break;
+                }
+            }
             
-            // === TELÉFONO EMISOR ===
+            // === TELÉFONO EMISOR (quien envía - Número de monedero) ===
             let telefonoEmisor = '';
-            const telEmisorMatch = texto.match(/Número de monedero:\s*(\d+)/i);
-            if (telEmisorMatch) {
-                telefonoEmisor = telEmisorMatch[1];
-            }
-            if (!telefonoEmisor) {
-                const realizadoMatch = texto.match(/Realizado por:[\s\S]*?(\d{8})/i);
-                if (realizadoMatch) telefonoEmisor = realizadoMatch[1];
+            const telEmisorPatterns = [
+                /Número de monedero:\s*(\d+)/i,
+                /Monedero:\s*(\d+)/i,
+                /Teléfono emisor:\s*(\d+)/i,
+                /Teléfono:\s*(\d+)/i,
+                /Realizado por:[\s\S]*?(\d{8})/i
+            ];
+            for (const pattern of telEmisorPatterns) {
+                const match = texto.match(pattern);
+                if (match && match[1]) {
+                    telefonoEmisor = match[1];
+                    break;
+                }
             }
             
-            // === TELÉFONO RECEPTOR ===
+            // === TELÉFONO RECEPTOR (quien recibe) ===
             let telefonoReceptor = '';
-            const telReceptorMatch = texto.match(/Destinatario:\s*(?:\D*?)(\d{8})/i);
-            if (telReceptorMatch) {
-                telefonoReceptor = telReceptorMatch[1];
-            }
-            if (!telefonoReceptor) {
-                const sinpeMatch = texto.match(/SINPE Móvil destino\s*(\d{4}[-]?\d{4})/i);
-                if (sinpeMatch) telefonoReceptor = sinpeMatch[1].replace(/-/g, '');
+            const telReceptorPatterns = [
+                /SINPE Móvil destino\s*(\d{4}[-]?\d{4})/i,
+                /Destinatario:[\s\S]*?(\d{8})/i,
+                /Beneficiario:[\s\S]*?(\d{8})/i,
+                /Teléfono destino:\s*(\d+)/i,
+                /A favor de:[\s\S]*?(\d{8})/i
+            ];
+            for (const pattern of telReceptorPatterns) {
+                const match = texto.match(pattern);
+                if (match && match[1]) {
+                    telefonoReceptor = match[1].replace(/-/g, '');
+                    break;
+                }
             }
             
-            // === NOMBRE EMISOR ===
+            // === NOMBRE EMISOR (Realizado por / Ordenante) ===
             let nombreEmisor = '';
-            const nombreEmisorMatch = texto.match(/Realizado por:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{5,50})/i);
-            if (nombreEmisorMatch) {
-                nombreEmisor = nombreEmisorMatch[1].trim();
+            const nombreEmisorPatterns = [
+                /Realizado por:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{3,50})/i,
+                /Ordenante:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{3,50})/i,
+                /Emisor:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{3,50})/i,
+                /De:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{3,50})/i
+            ];
+            for (const pattern of nombreEmisorPatterns) {
+                const match = texto.match(pattern);
+                if (match && match[1]) {
+                    nombreEmisor = match[1].trim();
+                    break;
+                }
             }
             
-            // === NOMBRE RECEPTOR ===
+            // === NOMBRE RECEPTOR (Destinatario / Beneficiario) ===
             let nombreReceptor = '';
-            const nombreReceptorMatch = texto.match(/Destinatario:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{5,50})/i);
-            if (nombreReceptorMatch) {
-                nombreReceptor = nombreReceptorMatch[1].trim();
+            const nombreReceptorPatterns = [
+                /Destinatario:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{3,50})/i,
+                /Beneficiario:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{3,50})/i,
+                /Receptor:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{3,50})/i,
+                /Para:\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]{3,50})/i
+            ];
+            for (const pattern of nombreReceptorPatterns) {
+                const match = texto.match(pattern);
+                if (match && match[1]) {
+                    nombreReceptor = match[1].trim();
+                    break;
+                }
             }
             
-            // === CONCEPTO ===
+            // === CONCEPTO / MOTIVO ===
             let concepto = '';
-            const conceptMatch = texto.match(/Concepto:\s*(.+?)(?:\n|$)/i);
-            if (conceptMatch) {
-                concepto = conceptMatch[1].trim();
+            const conceptPatterns = [
+                /Concepto:\s*(.+?)(?:\n|$)/i,
+                /Motivo:\s*(.+?)(?:\n|$)/i,
+                /Descripción:\s*(.+?)(?:\n|$)/i,
+                /Detalle:\s*(.+?)(?:\n|$)/i
+            ];
+            for (const pattern of conceptPatterns) {
+                const match = texto.match(pattern);
+                if (match && match[1]) {
+                    concepto = match[1].trim();
+                    break;
+                }
             }
             
             // === BANCO DETECTADO ===
             let bancoDetectado = '';
-            if (textoLower.includes('banco nacional') || textoLower.includes('bn sinpe')) {
-                bancoDetectado = 'Banco Nacional';
-            } else if (textoLower.includes('bcr')) {
-                bancoDetectado = 'BCR';
-            } else if (textoLower.includes('bac')) {
-                bancoDetectado = 'BAC';
-            } else if (textoLower.includes('popular')) {
-                bancoDetectado = 'Banco Popular';
+            const bancosMap = [
+                { keywords: ['banco nacional', 'bn sinpe', 'bnc'], nombre: 'Banco Nacional' },
+                { keywords: ['bcr'], nombre: 'BCR' },
+                { keywords: ['bac', 'bac credomatic'], nombre: 'BAC' },
+                { keywords: ['popular', 'banco popular'], nombre: 'Banco Popular' },
+                { keywords: ['davivienda'], nombre: 'Davivienda' },
+                { keywords: ['scotiabank'], nombre: 'Scotiabank' },
+                { keywords: ['promerica'], nombre: 'Promerica' },
+                { keywords: ['lafise'], nombre: 'Lafise' }
+            ];
+            for (const banco of bancosMap) {
+                for (const keyword of banco.keywords) {
+                    if (textoLower.includes(keyword)) {
+                        bancoDetectado = banco.nombre;
+                        break;
+                    }
+                }
+                if (bancoDetectado) break;
             }
             
             console.log('📊 DATOS EXTRAÍDOS:');
-            console.log('   Referencia:', referencia);
-            console.log('   Monto:', monto);
-            console.log('   Fecha:', fecha);
-            console.log('   Teléfono Emisor:', telefonoEmisor);
-            console.log('   Teléfono Receptor:', telefonoReceptor);
-            console.log('   Nombre Emisor:', nombreEmisor);
-            console.log('   Nombre Receptor:', nombreReceptor);
-            console.log('   Concepto:', concepto);
-            console.log('   Banco:', bancoDetectado);
+            console.log('   Referencia:', referencia || '❌ NO ENCONTRADA');
+            console.log('   Monto:', monto || '❌ NO ENCONTRADO');
+            console.log('   Fecha:', fecha || '❌ NO ENCONTRADA');
+            console.log('   Teléfono Emisor:', telefonoEmisor || '❌ NO ENCONTRADO');
+            console.log('   Teléfono Receptor:', telefonoReceptor || '❌ NO ENCONTRADO');
+            console.log('   Nombre Emisor:', nombreEmisor || '❌ NO ENCONTRADO');
+            console.log('   Nombre Receptor:', nombreReceptor || '❌ NO ENCONTRADO');
+            console.log('   Concepto:', concepto || '❌ NO ENCONTRADO');
+            console.log('   Banco:', bancoDetectado || '❌ NO ENCONTRADO');
             
             if (!referencia) {
                 setError('⚠️ No se pudo leer la referencia. Por favor, ingrésela manualmente.');
