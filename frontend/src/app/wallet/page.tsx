@@ -25,7 +25,6 @@ export default function WalletPage() {
     const [userPhone, setUserPhone] = useState('');
     const [showOcrAlert, setShowOcrAlert] = useState(false);
     const [ocrData, setOcrData] = useState<DatosComprobante | null>(null);
-    const [imagenComprobante, setImagenComprobante] = useState<string>('');
     const fileInputRef = useRef<HTMLInputElement>(null);
     
     // Filtros para historial
@@ -111,13 +110,6 @@ export default function WalletPage() {
         const file = e.target.files?.[0];
         if (!file) return;
         
-        // Convertir imagen a base64 para enviar al backend
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setImagenComprobante(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-        
         // Extraer datos con OCR
         const datos = await extraerDatos(file);
         if (datos) {
@@ -126,20 +118,6 @@ export default function WalletPage() {
             // Pre-llenar el formulario
             if (datos.referencia) setSinpeReference(datos.referencia);
             if (datos.monto && datos.monto > 0) setSinpeAmount(datos.monto.toString());
-            
-            // 🔥 Seleccionar el banco automáticamente según el OCR
-            if (datos.bancoOrigen) {
-                const bancoEncontrado = publicMethods.find(m => 
-                    m.name.toLowerCase() === datos.bancoOrigen.toLowerCase() ||
-                    m.name.toLowerCase().includes(datos.bancoOrigen.toLowerCase())
-                );
-                if (bancoEncontrado) {
-                    setSelectedSinpeBank(bancoEncontrado.name);
-                    console.log('✅ Banco seleccionado automáticamente:', bancoEncontrado.name);
-                } else {
-                    console.log('⚠️ Banco no encontrado en la lista:', datos.bancoOrigen);
-                }
-            }
             
             // Verificar si el teléfono del comprobante coincide con el teléfono registrado
             const telefonoLimpio = datos.telefonoOrigen.replace(/\D/g, '');
@@ -172,6 +150,7 @@ export default function WalletPage() {
         const thirdPartyAlert = showOcrAlert;
         const sourcePhone = ocrData?.telefonoOrigen || '';
         const sourceName = ocrData?.nombreOrigen || '';
+        const ocrTextoCompleto = ocrData?.textoCompleto || '';
         
         try {
             const res = await api.post('/wallet/recharge', {
@@ -181,7 +160,7 @@ export default function WalletPage() {
                 source_phone: sourcePhone,
                 source_name: sourceName,
                 third_party_alert: thirdPartyAlert,
-                comprobante_image: imagenComprobante
+                ocr_texto_completo: ocrTextoCompleto
             }, token);
             
             if (res.error) {
@@ -194,7 +173,6 @@ export default function WalletPage() {
                 }
                 setSinpeAmount('');
                 setSinpeReference('');
-                setImagenComprobante('');
                 setShowOcrAlert(false);
                 setOcrData(null);
                 fetchWalletData();
@@ -331,12 +309,16 @@ export default function WalletPage() {
                         {ocrError && (
                             <p className="text-red-400 text-[10px] mt-1">{ocrError}</p>
                         )}
-                        {imagenComprobante && (
-                            <div className="mt-2">
-                                <p className="text-emerald-400 text-[10px]">✅ Comprobante cargado</p>
-                            </div>
-                        )}
                     </div>
+
+                    {/* Banco detectado por OCR */}
+                    {ocrData?.bancoOrigen && (
+                        <div className="mb-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3">
+                            <p className="text-emerald-400 text-[10px] font-black uppercase">🏦 Banco detectado automáticamente</p>
+                            <p className="text-white text-sm font-bold">{ocrData.bancoOrigen}</p>
+                            <p className="text-gray-400 text-[9px]">Verifique que sea correcto antes de enviar.</p>
+                        </div>
+                    )}
                     
                     {/* Alerta de tercero */}
                     {showOcrAlert && ocrData && (
@@ -363,6 +345,7 @@ export default function WalletPage() {
                                     <option key={i} value={m.name}>{m.name} ({m.sinpePhone})</option>
                                 ))}
                             </select>
+                            <p className="text-gray-500 text-[8px] mt-1">* Si el banco detectado no aparece, selecciónelo manualmente.</p>
                         </div>
                         <div>
                             <label className="text-gray-400 text-xs font-black uppercase block mb-2">Monto (₡)</label>
