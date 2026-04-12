@@ -20,12 +20,21 @@ export const getWalletBalance = async (req: AuthRequest, res: Response) => {
 export const createSinpeRecharge = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
-        const { amount, reference_number, bank_name } = req.body;
+        const { 
+            amount, 
+            reference_number, 
+            bank_name,
+            source_phone,
+            source_name,
+            third_party_alert
+        } = req.body;
+        
         if (!reference_number) return res.status(400).json({ error: 'Referencia requerida' });
+        
         await pool.query(
-            `INSERT INTO sinpe_deposits (user_id, amount, reference_number, bank_name, status) 
-             VALUES ($1, $2, $3, $4, 'PENDING')`,
-            [userId, amount, reference_number, bank_name || 'SINPE MOVIL']
+            `INSERT INTO sinpe_deposits (user_id, amount, reference_number, bank_name, status, source_phone, source_name, third_party_alert) 
+             VALUES ($1, $2, $3, $4, 'PENDING', $5, $6, $7)`,
+            [userId, amount, reference_number, bank_name || 'SINPE MOVIL', source_phone || null, source_name || null, third_party_alert || false]
         );
         res.status(201).json({ message: 'Recarga reportada' });
     } catch (error) { 
