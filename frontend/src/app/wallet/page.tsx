@@ -110,19 +110,16 @@ export default function WalletPage() {
         const file = e.target.files?.[0];
         if (!file) return;
         
-        // Extraer datos con OCR
         const datos = await extraerDatos(file);
         if (datos) {
             setOcrData(datos);
             
-            // Pre-llenar el formulario
             if (datos.referencia) setSinpeReference(datos.referencia);
             if (datos.monto && datos.monto > 0) setSinpeAmount(datos.monto.toString());
             
-            // Verificar si el teléfono del comprobante coincide con el teléfono registrado
-            const telefonoLimpio = datos.telefonoOrigen.replace(/\D/g, '');
+            // Verificar si es tercero (comparar teléfono emisor con usuario)
+            const telefonoLimpio = datos.telefonoEmisor.replace(/\D/g, '');
             const userPhoneLimpio = userPhone.replace(/\D/g, '');
-            
             const esTercero = telefonoLimpio !== '' && userPhoneLimpio !== '' && telefonoLimpio !== userPhoneLimpio;
             
             if (esTercero) {
@@ -132,7 +129,6 @@ export default function WalletPage() {
             }
         }
         
-        // Limpiar el input para permitir subir el mismo archivo nuevamente
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
@@ -146,21 +142,21 @@ export default function WalletPage() {
             return;
         }
         
-        // Determinar si hay alerta de tercero
         const thirdPartyAlert = showOcrAlert;
-        const sourcePhone = ocrData?.telefonoOrigen || '';
-        const sourceName = ocrData?.nombreOrigen || '';
-        const ocrTextoCompleto = ocrData?.textoCompleto || '';
         
         try {
             const res = await api.post('/wallet/recharge', {
                 amount: Number(sinpeAmount),
                 reference_number: sinpeReference,
                 bank_name: selectedSinpeBank,
-                source_phone: sourcePhone,
-                source_name: sourceName,
+                telefono_emisor: ocrData?.telefonoEmisor || '',
+                telefono_receptor: ocrData?.telefonoReceptor || '',
+                nombre_emisor: ocrData?.nombreEmisor || '',
+                nombre_receptor: ocrData?.nombreReceptor || '',
+                concepto: ocrData?.concepto || '',
+                banco_detectado: ocrData?.bancoDetectado || '',
                 third_party_alert: thirdPartyAlert,
-                ocr_texto_completo: ocrTextoCompleto
+                ocr_texto_completo: ocrData?.textoCompleto || ''
             }, token);
             
             if (res.error) {
@@ -311,12 +307,33 @@ export default function WalletPage() {
                         )}
                     </div>
 
-                    {/* Banco detectado por OCR */}
-                    {ocrData?.bancoOrigen && (
-                        <div className="mb-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3">
-                            <p className="text-emerald-400 text-[10px] font-black uppercase">🏦 Banco detectado automáticamente</p>
-                            <p className="text-white text-sm font-bold">{ocrData.bancoOrigen}</p>
-                            <p className="text-gray-400 text-[9px]">Verifique que sea correcto antes de enviar.</p>
+                    {/* Datos extraídos del comprobante */}
+                    {ocrData && (
+                        <div className="mb-4 bg-gray-800/50 rounded-xl p-3 border border-white/10">
+                            <p className="text-emerald-400 text-[10px] font-black uppercase mb-2">📋 Datos extraídos del comprobante</p>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                {ocrData.bancoDetectado && (
+                                    <div><span className="text-gray-400">Banco:</span> <span className="text-white font-bold">{ocrData.bancoDetectado}</span></div>
+                                )}
+                                {ocrData.fecha && (
+                                    <div><span className="text-gray-400">Fecha:</span> <span className="text-white">{ocrData.fecha}</span></div>
+                                )}
+                                {ocrData.telefonoEmisor && (
+                                    <div><span className="text-gray-400">Teléfono emisor:</span> <span className="text-white">{ocrData.telefonoEmisor}</span></div>
+                                )}
+                                {ocrData.telefonoReceptor && (
+                                    <div><span className="text-gray-400">Teléfono receptor:</span> <span className="text-white">{ocrData.telefonoReceptor}</span></div>
+                                )}
+                                {ocrData.nombreEmisor && (
+                                    <div className="col-span-2"><span className="text-gray-400">Nombre emisor:</span> <span className="text-white">{ocrData.nombreEmisor}</span></div>
+                                )}
+                                {ocrData.nombreReceptor && (
+                                    <div className="col-span-2"><span className="text-gray-400">Nombre receptor:</span> <span className="text-white">{ocrData.nombreReceptor}</span></div>
+                                )}
+                                {ocrData.concepto && (
+                                    <div className="col-span-2"><span className="text-gray-400">Concepto:</span> <span className="text-white">{ocrData.concepto}</span></div>
+                                )}
+                            </div>
                         </div>
                     )}
                     
@@ -325,7 +342,7 @@ export default function WalletPage() {
                         <div className="mb-4 bg-red-500/20 border border-red-500/50 rounded-xl p-3">
                             <p className="text-red-400 font-black text-xs uppercase">⚠️ ATENCIÓN: SINPE DE TERCERO</p>
                             <p className="text-gray-300 text-[10px] mt-1">
-                                El comprobante pertenece a: {ocrData.nombreOrigen || 'Desconocido'} ({ocrData.telefonoOrigen || 'Sin teléfono'})
+                                El comprobante pertenece a: {ocrData.nombreEmisor || 'Desconocido'} ({ocrData.telefonoEmisor || 'Sin teléfono'})
                             </p>
                             <p className="text-gray-400 text-[9px] mt-1">
                                 Tu solicitud será revisada manualmente por el administrador.
