@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import AnnouncementBanner from '@/components/AnnouncementBanner';
+import SessionTimeout from '../components/SessionTimeout';
 
 export const metadata: Metadata = {
   title: 'Tiempos - Premium Betting',
@@ -23,6 +24,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body className="antialiased min-h-screen flex flex-col pt-0 lg:pt-20 pb-24 lg:pb-0 font-sans tracking-tight bg-[#0f172a] text-gray-200">
+        <SessionTimeout />
         <Navbar />
         <main className="flex-1 w-full flex flex-col p-4 md:p-8">
           {children}
