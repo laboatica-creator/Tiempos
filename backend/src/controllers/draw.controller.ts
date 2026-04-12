@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { pool } from '../database/db';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { ScraperService } from '../services/scraper.service';
+import bcrypt from 'bcrypt';
 
 const PAYOUT_MULTIPLIER = 90;
 
@@ -25,7 +26,6 @@ export const getDraws = async (req: Request, res: Response) => {
         const { date, status } = req.query;
         const timeZone = 'America/Costa_Rica';
         
-        // Obtener fecha actual en Costa Rica
         const today = new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date());
         console.log(`[DRAWS] Fecha actual Costa Rica: ${today}`);
 
@@ -42,6 +42,7 @@ export const getDraws = async (req: Request, res: Response) => {
                 d.max_bet,
                 d.created_at,
                 d.updated_at,
+                d.is_settled,
                 (SELECT COALESCE(SUM(total_amount), 0) FROM bets WHERE draw_id = d.id AND status != 'CANCELLED') as total_sold
             FROM draws d 
             WHERE 1=1
@@ -69,24 +70,100 @@ export const getDraws = async (req: Request, res: Response) => {
 
 export const setWinningNumber = async (req: AuthRequest, res: Response) => {
     const { drawId } = req.params;
-    const { winning_number } = req.body;
+    const { winning_number, admin_password, is_correction, reason } = req.body;
+    const userId = req.user?.id;
     const client = await pool.connect();
 
     try {
         await client.query('BEGIN');
 
         const drawRes = await client.query(
-            `UPDATE draws SET winning_number = $1, status = 'FINISHED', updated_at = NOW() 
-             WHERE id = $2 AND status IN ('OPEN', 'CLOSED') RETURNING *`,
-            [winning_number, drawId]
+            `SELECT * FROM draws WHERE id = $1 FOR UPDATE`,
+            [drawId]
         );
-
+        
         if (drawRes.rows.length === 0) {
-            throw new Error('Sorteo no encontrado o ya finalizado.');
+            throw new Error('Sorteo no encontrado.');
         }
-
+        
         const draw = drawRes.rows[0];
-
+        
+        const drawDateTime = new Date(`${draw.draw_date}T${draw.draw_time}:00`);
+        const horaGracia = new Date(drawDateTime.getTime() + 60 * 60 * 1000);
+        const ahora = new Date();
+        const fueraDeTiempo = ahora > horaGracia;
+        
+        const necesitaPassword = (draw.winning_number !== null && is_correction === true) || fueraDeTiempo;
+        
+        if (necesitaPassword) {
+            const adminCheck = await client.query(
+                `SELECT password FROM users WHERE id = $1 AND role IN ('ADMIN', 'MASTER_ADMIN')`,
+                [userId]
+            );
+            
+            if (adminCheck.rows.length === 0) {
+                return res.status(403).json({ error: 'No autorizado. Solo administradores.' });
+            }
+            
+            const isValidPassword = await bcrypt.compare(admin_password, adminCheck.rows[0].password);
+            if (!isValidPassword) {
+                return res.status(403).json({ error: 'Contraseña de administrador incorrecta.' });
+            }
+        }
+        
+        const isCorrection = draw.winning_number !== null && is_correction === true;
+        
+        if (isCorrection) {
+            console.log(`🔄 Revirtiendo premios del número anterior: ${draw.winning_number}`);
+            
+            const previousWinners = await client.query(
+                `SELECT bi.*, b.user_id, w.id as winning_id, w.amount as prize_amount
+                 FROM bet_items bi
+                 JOIN bets b ON bi.bet_id = b.id
+                 JOIN winnings w ON w.bet_item_id = bi.id
+                 WHERE b.draw_id = $1 AND bi.number = $2`,
+                [drawId, draw.winning_number]
+            );
+            
+            for (const winner of previousWinners.rows) {
+                await client.query(
+                    `UPDATE wallets SET balance = balance - $1, total_winnings = total_winnings - $1 
+                     WHERE user_id = $2`,
+                    [winner.prize_amount, winner.user_id]
+                );
+                
+                await client.query(`DELETE FROM winnings WHERE id = $1`, [winner.winning_id]);
+                
+                await client.query(
+                    `INSERT INTO wallet_transactions (wallet_id, type, amount, description) 
+                     SELECT id, 'REFUND', $1, 'REVERSIÓN: Corrección de número ganador' 
+                     FROM wallets WHERE user_id = $2`,
+                    [winner.prize_amount, winner.user_id]
+                );
+            }
+            
+            await client.query(
+                `INSERT INTO draw_winner_audit (draw_id, old_winning_number, new_winning_number, changed_by, reason)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [drawId, draw.winning_number, winning_number, userId, reason || 'Corrección manual']
+            );
+            
+            console.log(`✅ Revertidos ${previousWinners.rows.length} premios anteriores`);
+        }
+        
+        await client.query(
+            `UPDATE draws 
+             SET winning_number = $1, 
+                 status = 'FINISHED',
+                 winner_set_by = $2,
+                 winner_set_at = NOW(),
+                 winner_modified_by = $3,
+                 winner_modified_at = NOW(),
+                 updated_at = NOW()
+             WHERE id = $4`,
+            [winning_number, userId, isCorrection ? userId : null, drawId]
+        );
+        
         const winningBets = await client.query(
             `SELECT bi.*, b.user_id 
              FROM bet_items bi
@@ -94,7 +171,7 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
              WHERE b.draw_id = $1 AND bi.number = $2 AND b.status = 'ACTIVE'`,
             [drawId, winning_number]
         );
-
+        
         for (const item of winningBets.rows) {
             const prize = Number(item.amount) * PAYOUT_MULTIPLIER;
             
@@ -103,12 +180,12 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
                  WHERE user_id = $2`,
                 [prize, item.user_id]
             );
-
+            
             await client.query(
                 `INSERT INTO winnings (bet_item_id, user_id, draw_id, amount) VALUES ($1, $2, $3, $4)`,
                 [item.id, item.user_id, drawId, prize]
             );
-
+            
             await client.query(
                 `INSERT INTO wallet_transactions (wallet_id, type, amount, description, reference_id) 
                  SELECT id, 'WIN', $1, $2, $3 FROM wallets WHERE user_id = $4`,
@@ -117,15 +194,33 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
             
             await client.query(`UPDATE bet_items SET status = 'WON', prize = $1 WHERE id = $2`, [prize, item.id]);
         }
-
-        await client.query(
-            `UPDATE bet_items SET status = 'LOST' 
-             WHERE bet_id IN (SELECT id FROM bets WHERE draw_id = $1) AND number != $2`,
-            [drawId, winning_number]
-        );
-
+        
+        if (!isCorrection) {
+            await client.query(
+                `UPDATE bet_items SET status = 'LOST' 
+                 WHERE bet_id IN (SELECT id FROM bets WHERE draw_id = $1) AND number != $2`,
+                [drawId, winning_number]
+            );
+        }
+        
         await client.query('COMMIT');
-        res.json({ message: 'Número ganador registrado y premios pagados.', winners: winningBets.rows.length });
+        
+        let message = '';
+        if (isCorrection) {
+            message = `✅ Número CORREGIDO a ${winning_number}. Premios recalculados.`;
+        } else if (fueraDeTiempo) {
+            message = `✅ Número ganador ${winning_number} registrado FUERA DE HORARIO (con contraseña). Premios pagados.`;
+        } else {
+            message = `✅ Número ganador ${winning_number} registrado. Premios pagados.`;
+        }
+        
+        res.json({ 
+            message, 
+            winners: winningBets.rows.length,
+            is_correction: isCorrection,
+            fuera_de_tiempo: fueraDeTiempo
+        });
+        
     } catch (error: any) {
         await client.query('ROLLBACK');
         console.error('Error setting winning number:', error);
@@ -211,5 +306,49 @@ export const getSuggestedResults = async (req: AuthRequest, res: Response) => {
     } catch (error) {
         console.error('[SUGGESTIONS] Error:', error);
         res.json({ number: null, message: 'No se pudieron obtener sugerencias' });
+    }
+};
+
+export const liquidateDraw = async (req: AuthRequest, res: Response) => {
+    const { draw_id } = req.body;
+    const client = await pool.connect();
+    
+    try {
+        await client.query('BEGIN');
+        
+        const drawRes = await client.query(
+            `SELECT * FROM draws WHERE id = $1 FOR UPDATE`,
+            [draw_id]
+        );
+        
+        if (drawRes.rows.length === 0) {
+            throw new Error('Sorteo no encontrado');
+        }
+        
+        const draw = drawRes.rows[0];
+        
+        if (!draw.winning_number) {
+            throw new Error('El sorteo no tiene número ganador');
+        }
+        
+        if (draw.is_settled) {
+            throw new Error('El sorteo ya fue liquidado');
+        }
+        
+        await client.query(
+            `UPDATE draws SET is_settled = true, settled_at = NOW(), updated_at = NOW() WHERE id = $1`,
+            [draw_id]
+        );
+        
+        await client.query('COMMIT');
+        
+        res.json({ message: 'Sorteo liquidado correctamente' });
+        
+    } catch (error: any) {
+        await client.query('ROLLBACK');
+        console.error('Error liquidating draw:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        client.release();
     }
 };
