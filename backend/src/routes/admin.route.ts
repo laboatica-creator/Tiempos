@@ -62,7 +62,7 @@ router.post('/backup/export', authenticateJWT, requireRole(['ADMIN']), exportDat
 router.post('/backup/import', authenticateJWT, requireRole(['ADMIN']), importDatabase);
 
 // ========== RUTAS DE SORTEOS ==========
-router.post('/draws/set-winner', authenticateJWT, requirePermission('draws'), setWinningNumber);
+router.post('/draws/set-winner/:drawId', authenticateJWT, requirePermission('draws'), setWinningNumber);
 router.post('/draws/cancel/:drawId', authenticateJWT, requirePermission('draws'), cancelDraw);
 router.get('/draws/suggested-results', authenticateJWT, requirePermission('draws'), getSuggestedResults);
 
