@@ -24,21 +24,55 @@ export const createSinpeRecharge = async (req: AuthRequest, res: Response) => {
             amount, 
             reference_number, 
             bank_name,
-            source_phone,
-            source_name,
-            third_party_alert
+            telefono_emisor,
+            telefono_receptor,
+            nombre_emisor,
+            nombre_receptor,
+            concepto,
+            banco_detectado,
+            third_party_alert,
+            ocr_texto_completo
         } = req.body;
         
         if (!reference_number) return res.status(400).json({ error: 'Referencia requerida' });
         
+        // Verificar si ya existe una solicitud con esta referencia
+        const existing = await pool.query(
+            `SELECT id, status FROM sinpe_deposits WHERE reference_number = $1`,
+            [reference_number]
+        );
+        
+        if (existing.rows.length > 0) {
+            const estado = existing.rows[0].status;
+            if (estado === 'PENDING') {
+                return res.status(400).json({ error: '⚠️ Ya existe una solicitud de recarga PENDIENTE con esta referencia.' });
+            } else if (estado === 'APPROVED') {
+                return res.status(400).json({ error: '⚠️ Esta referencia ya fue APROBADA anteriormente.' });
+            } else if (estado === 'REJECTED') {
+                return res.status(400).json({ error: '⚠️ Esta referencia fue RECHAZADA anteriormente. Contacte al administrador.' });
+            }
+        }
+        
         await pool.query(
-            `INSERT INTO sinpe_deposits (user_id, amount, reference_number, bank_name, status, source_phone, source_name, third_party_alert) 
-             VALUES ($1, $2, $3, $4, 'PENDING', $5, $6, $7)`,
-            [userId, amount, reference_number, bank_name || 'SINPE MOVIL', source_phone || null, source_name || null, third_party_alert || false]
+            `INSERT INTO sinpe_deposits (
+                user_id, amount, reference_number, bank_name, status,
+                telefono_emisor, telefono_receptor, nombre_emisor, nombre_receptor,
+                concepto, banco_detectado, third_party_alert, ocr_texto_completo
+            ) VALUES ($1, $2, $3, $4, 'PENDING', $5, $6, $7, $8, $9, $10, $11, $12)`,
+            [
+                userId, amount, reference_number, bank_name || 'SINPE MOVIL',
+                telefono_emisor || null, telefono_receptor || null,
+                nombre_emisor || null, nombre_receptor || null,
+                concepto || null, banco_detectado || null,
+                third_party_alert || false, ocr_texto_completo || null
+            ]
         );
         res.status(201).json({ message: 'Recarga reportada' });
-    } catch (error) { 
+    } catch (error: any) { 
         console.error('Error creating recharge:', error);
+        if (error.code === '23505') {
+            return res.status(400).json({ error: '⚠️ Esta referencia SINPE ya existe en el sistema.' });
+        }
         res.status(500).json({ error: 'Error al procesar recarga' }); 
     }
 };
