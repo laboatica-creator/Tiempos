@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '../../../lib/api';
+import { formatDrawDate, getCurrentCostaRicaTime } from '../../../lib/dateUtils';
 
 interface Draw {
     id: string;
@@ -9,260 +10,316 @@ interface Draw {
     draw_date: string;
     draw_time: string;
     status: string;
-    winning_number?: string;
+    winning_number: string | null;
+    is_settled: boolean;
 }
 
 export default function AdminResultsPage() {
     const [draws, setDraws] = useState<Draw[]>([]);
-    const [selectedDraw, setSelectedDraw] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [selectedDraw, setSelectedDraw] = useState<Draw | null>(null);
     const [winningNumber, setWinningNumber] = useState('');
-    const [processing, setProcessing] = useState(false);
-    const [isMounted, setIsMounted] = useState(false);
-    const [resultsDate, setResultsDate] = useState('');
-    const [filterDate, setFilterDate] = useState('');
-    const [showFilter, setShowFilter] = useState(false);
-    const [todayWinningNumbers, setTodayWinningNumbers] = useState<any[]>([]);
+    const [submitting, setSubmitting] = useState(false);
+    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [currentTime, setCurrentTime] = useState('');
+    const [searchDate, setSearchDate] = useState('');
+    const [showDateSearch, setShowDateSearch] = useState(false);
+
+    // Obtener fecha actual en Costa Rica para el filtro inicial
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
+    const [filterDate, setFilterDate] = useState(today);
 
     useEffect(() => {
-        setIsMounted(true);
-        // Obtener fecha actual en formato YYYY-MM-DD
-        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
-        setResultsDate(today);
-        setFilterDate(today);
         fetchDraws();
+        const interval = setInterval(() => {
+            setCurrentTime(getCurrentCostaRicaTime());
+        }, 1000);
+        return () => clearInterval(interval);
     }, []);
 
     useEffect(() => {
-        if (draws.length > 0) {
-            loadTodayWinningNumbers();
-        }
-    }, [draws]);
+        fetchDraws();
+    }, [filterDate]);
 
     const fetchDraws = async () => {
         try {
+            setLoading(true);
             const token = sessionStorage.getItem('token');
-            const data = await api.get('/draws', token);
-            if (Array.isArray(data)) {
-                setDraws(data);
-                // Seleccionar el primer sorteo abierto o cerrado del día
-                const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
-                const todayDraw = data.find(d => d.draw_date === today && (d.status === 'OPEN' || d.status === 'CLOSED'));
-                if (todayDraw) setSelectedDraw(todayDraw.id);
+            if (!token) {
+                window.location.href = '/login';
+                return;
             }
-        } catch (err) { 
-            console.error(err); 
+
+            const response = await api.get('/draws', token);
+            
+            if (Array.isArray(response)) {
+                // Filtrar sorteos por la fecha seleccionada
+                const filtered = response.filter((draw: Draw) => draw.draw_date === filterDate);
+                setDraws(filtered);
+            } else if (response.error) {
+                setMessage({ type: 'error', text: response.error });
+            }
+        } catch (err) {
+            console.error('Error fetching draws:', err);
+            setMessage({ type: 'error', text: 'Error al cargar los sorteos' });
+        } finally {
+            setLoading(false);
         }
     };
 
-    const loadTodayWinningNumbers = () => {
-        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
-        const todayDraws = draws.filter(d => d.draw_date === today && d.winning_number);
-        
-        const numbers = todayDraws.map(d => ({
-            number: d.winning_number!,
-            draw_time: d.draw_time,
-            lottery: d.lottery_type
-        }));
-        
-        setTodayWinningNumbers(numbers);
-    };
-
-    const handleProcessDraw = async () => {
-        if (!winningNumber || winningNumber.length !== 2 || !selectedDraw) {
-            alert('Ingrese un número de 2 dígitos y seleccione un sorteo.');
+    const handleSetWinner = async () => {
+        if (!selectedDraw) {
+            setMessage({ type: 'error', text: 'Seleccione un sorteo primero' });
             return;
         }
-        const draw = draws.find(d => d.id === selectedDraw);
-        if (confirm(`¿Confirma el número GANADOR: ${winningNumber} para el sorteo ${draw?.lottery_type} de las ${draw?.draw_time}?`)) {
-            setProcessing(true);
-            try {
-                const token = sessionStorage.getItem('token');
-                const data = await api.post(`/draws/${selectedDraw}/win`, { winning_number: winningNumber }, token);
-                if (data.error) alert(data.error);
-                else {
-                    alert('✅ Éxito al procesar sorteo.');
-                    setWinningNumber('');
-                    fetchDraws();
-                }
-            } catch (err) { alert('Error al procesar.'); }
-            finally { setProcessing(false); }
+
+        if (!winningNumber || winningNumber.length !== 2) {
+            setMessage({ type: 'error', text: 'Ingrese un número de 2 dígitos (00-99)' });
+            return;
+        }
+
+        setSubmitting(true);
+        setMessage(null);
+
+        try {
+            const token = sessionStorage.getItem('token');
+            const response = await api.post('/admin/draws/set-winner', {
+                draw_id: selectedDraw.id,
+                winning_number: winningNumber
+            }, token);
+
+            if (response.error) {
+                setMessage({ type: 'error', text: response.error });
+            } else {
+                setMessage({ type: 'success', text: `✅ Número ganador ${winningNumber} registrado para ${selectedDraw.lottery_type} - ${selectedDraw.draw_time}` });
+                setWinningNumber('');
+                setSelectedDraw(null);
+                fetchDraws(); // Recargar lista
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: 'Error al registrar el número ganador' });
+        } finally {
+            setSubmitting(false);
         }
     };
 
-    // Formatear fecha de YYYY-MM-DD a DD/MM/YYYY
-    const formatDate = (dateStr: string) => {
-        if (!dateStr) return '';
-        const [year, month, day] = dateStr.split('-');
-        return `${day}/${month}/${year}`;
+    const handleLiquidate = async (draw: Draw) => {
+        if (!draw.winning_number) {
+            setMessage({ type: 'error', text: 'Este sorteo no tiene número ganador aún' });
+            return;
+        }
+
+        if (draw.is_settled) {
+            setMessage({ type: 'error', text: 'Este sorteo ya fue liquidado' });
+            return;
+        }
+
+        setSubmitting(true);
+        setMessage(null);
+
+        try {
+            const token = sessionStorage.getItem('token');
+            const response = await api.post('/admin/draws/liquidate', {
+                draw_id: draw.id
+            }, token);
+
+            if (response.error) {
+                setMessage({ type: 'error', text: response.error });
+            } else {
+                setMessage({ type: 'success', text: `🎉 Sorteo liquidado correctamente. Premios distribuidos.` });
+                fetchDraws();
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: 'Error al liquidar el sorteo' });
+        } finally {
+            setSubmitting(false);
+        }
     };
 
-    if (!isMounted) return null;
-
-    // Sorteos del día seleccionado para el selector
-    const actionableDraws = draws.filter(d => d.draw_date === resultsDate && (d.status === 'OPEN' || d.status === 'CLOSED'));
-
-    // Sorteos pendientes del día ACTUAL
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' });
-    const pendingWinnerDraws = draws.filter(d => 
-        d.draw_date === today && 
-        d.status === 'CLOSED' && 
-        !d.winning_number
-    );
-
-    // Sorteos para el filtro de fechas pasadas
-    const filteredDrawsByDate = draws.filter(d => d.draw_date === filterDate);
+    const pendingDraws = draws.filter(d => !d.winning_number && d.draw_date === filterDate);
+    const settledDraws = draws.filter(d => d.winning_number);
 
     return (
-        <main className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6 pb-20">
-            {/* Header */}
-            <header className="bg-[#1e293b] p-6 md:p-8 rounded-2xl border border-white/5 shadow-2xl">
-                <h1 className="text-3xl md:text-4xl font-black text-white uppercase italic tracking-tighter">Resultados</h1>
-                <p className="text-emerald-400 font-bold uppercase text-[10px] tracking-[0.4em] mt-1">Liquidación de Sorteos</p>
-            </header>
-
-            {/* Números ganadores del día */}
-            {todayWinningNumbers.length > 0 && (
-                <div className="bg-gradient-to-r from-emerald-900/30 to-emerald-800/20 border border-emerald-500/20 rounded-2xl p-4">
-                    <h2 className="text-emerald-400 font-black text-xs uppercase tracking-widest mb-3">📊 Números ganadores de hoy</h2>
-                    <div className="flex flex-wrap gap-3">
-                        {todayWinningNumbers.map((item, idx) => (
-                            <div key={idx} className="bg-black/40 rounded-xl p-3 min-w-[100px] text-center">
-                                <span className="text-3xl font-black text-emerald-400">{item.number}</span>
-                                <p className="text-gray-500 text-[9px] mt-1">{item.lottery} - {item.draw_time}</p>
-                            </div>
-                        ))}
+        <main className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-4">
+            <div className="max-w-4xl mx-auto">
+                {/* Header con hora */}
+                <div className="flex justify-between items-center mb-6 p-4 bg-white/5 rounded-2xl">
+                    <div>
+                        <h1 className="text-white text-2xl font-black">🎰 Liquidación de Sorteos</h1>
+                        <p className="text-gray-400 text-xs">Registro de números ganadores</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-gray-400 text-xs">Hora CR</p>
+                        <p className="text-emerald-400 text-sm font-black">{currentTime}</p>
                     </div>
                 </div>
-            )}
 
-            {/* Filtro de fechas pasadas */}
-            <div className="flex justify-end">
-                <button
-                    onClick={() => setShowFilter(!showFilter)}
-                    className="text-gray-400 text-xs font-black uppercase tracking-widest flex items-center gap-2"
-                >
-                    📅 BUSCAR SORTEOS ANTIGUOS
-                    <span className="text-emerald-400">{showFilter ? '▲' : '▼'}</span>
-                </button>
-            </div>
-
-            {showFilter && (
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                    <div className="flex flex-col md:flex-row gap-4 items-center">
-                        <input 
-                            type="date" 
-                            value={filterDate} 
-                            onChange={(e) => setFilterDate(e.target.value)}
-                            className="bg-black/40 border border-white/10 p-3 rounded-xl text-white font-black"
-                        />
-                        <div className="flex-1">
-                            {filteredDrawsByDate.length === 0 ? (
-                                <p className="text-gray-500 text-sm">No hay sorteos para esta fecha</p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {filteredDrawsByDate.map(draw => (
-                                        <div key={draw.id} className="flex justify-between items-center p-3 bg-white/5 rounded-xl">
-                                            <div>
-                                                <p className="text-white font-bold text-sm">{draw.lottery_type} - {draw.draw_time}</p>
-                                                <p className="text-gray-500 text-[10px]">{formatDate(draw.draw_date)}</p>
-                                            </div>
-                                            <div>
-                                                {draw.winning_number ? (
-                                                    <span className="text-emerald-400 font-black text-xl">{draw.winning_number}</span>
-                                                ) : (
-                                                    <span className="text-gray-500 text-xs">Sin resultado</span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                {/* Mensajes */}
+                {message && (
+                    <div className={`mb-6 p-4 rounded-2xl ${
+                        message.type === 'success' 
+                            ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400' 
+                            : 'bg-red-500/20 border border-red-500/50 text-red-400'
+                    }`}>
+                        {message.text}
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* Sección principal */}
-            <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
-                {/* Columna izquierda - Registrar ganador */}
-                <div className="lg:col-span-8 space-y-6">
-                    <div className="glass-panel p-6 md:p-8 bg-black/20 rounded-2xl">
-                        <div className="flex flex-col md:flex-row gap-4 mb-6">
-                            <select 
-                                value={selectedDraw} 
-                                onChange={(e) => {
-                                    setSelectedDraw(e.target.value);
-                                    setWinningNumber('');
+                {/* Selector de fecha */}
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6">
+                    <button
+                        onClick={() => setShowDateSearch(!showDateSearch)}
+                        className="w-full flex justify-between items-center text-white font-bold"
+                    >
+                        <span>📅 BUSCAR SORTEOS ANTIGUOS</span>
+                        <span className="text-gray-400">{showDateSearch ? '▲' : '▼'}</span>
+                    </button>
+                    
+                    {showDateSearch && (
+                        <div className="mt-4">
+                            <input
+                                type="date"
+                                value={searchDate}
+                                onChange={(e) => setSearchDate(e.target.value)}
+                                className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white"
+                            />
+                            <button
+                                onClick={() => {
+                                    if (searchDate) {
+                                        setFilterDate(searchDate);
+                                        setShowDateSearch(false);
+                                    }
                                 }}
-                                className="flex-1 bg-black/40 border border-white/10 p-4 rounded-xl text-white font-bold outline-none"
+                                className="w-full mt-3 py-3 bg-emerald-600 rounded-xl text-white font-bold"
                             >
-                                <option value="">Seleccionar sorteo...</option>
-                                {actionableDraws.map(d => (
-                                    <option key={d.id} value={d.id}>
-                                        {d.lottery_type} - {d.draw_time} ({formatDate(d.draw_date)})
-                                    </option>
-                                ))}
-                            </select>
-                            <input 
-                                type="date" 
-                                value={resultsDate} 
-                                onChange={(e) => setResultsDate(e.target.value)}
-                                className="bg-black/40 border border-white/10 p-4 rounded-xl text-white font-black"
-                            />
-                        </div>
-
-                        <div className="flex flex-col items-center gap-6 py-8 bg-white/5 rounded-2xl border border-white/5">
-                            <p className="font-black text-gray-500 uppercase tracking-widest text-xs">Ingresar Número Ganador</p>
-                            <input 
-                                type="text" 
-                                maxLength={2} 
-                                value={winningNumber}
-                                onChange={(e) => setWinningNumber(e.target.value.replace(/\D/g, ''))}
-                                placeholder="--"
-                                className="text-7xl md:text-9xl font-black text-red-500 bg-transparent text-center outline-none leading-none placeholder:text-gray-800 w-40"
-                            />
-                            <button 
-                                onClick={handleProcessDraw} 
-                                disabled={processing || winningNumber.length !== 2 || !selectedDraw}
-                                className="w-full max-w-md py-5 bg-gradient-to-r from-red-600 to-red-500 rounded-xl text-white font-black text-lg uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {processing ? 'PROCESANDO...' : 'LIQUIDAR PREMIOS'}
+                                Buscar
                             </button>
                         </div>
-                    </div>
+                    )}
                 </div>
 
-                {/* Columna derecha - Sorteos pendientes del día */}
-                <div className="lg:col-span-4 space-y-6">
-                    <div className="bg-red-500/5 border border-red-500/10 rounded-2xl p-5">
-                        <h3 className="text-red-400 font-black uppercase text-xs tracking-widest mb-4">⚠️ Sorteos sin Ganador (Hoy)</h3>
+                {/* Fecha actual mostrada */}
+                <div className="text-center mb-4">
+                    <p className="text-gray-400 text-sm">Mostrando sorteos del:</p>
+                    <p className="text-white font-black text-xl">{formatDrawDate(filterDate)}</p>
+                </div>
+
+                {/* Sorteos pendientes (sin ganador) */}
+                <div className="mb-8">
+                    <h2 className="text-white font-black uppercase text-sm mb-3 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                        Sorteos Pendientes ({pendingDraws.length})
+                    </h2>
+                    
+                    {pendingDraws.length === 0 ? (
+                        <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+                            <p className="text-emerald-400">✅ Todos los sorteos tienen número ganador</p>
+                        </div>
+                    ) : (
                         <div className="space-y-3">
-                            {pendingWinnerDraws.length === 0 ? (
-                                <p className="text-gray-500 text-sm text-center py-6">No hay sorteos pendientes para hoy</p>
-                            ) : (
-                                pendingWinnerDraws.map(d => (
-                                    <div key={d.id} className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex justify-between items-center">
+                            {pendingDraws.map(draw => (
+                                <div key={draw.id} className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                                    <div className="flex justify-between items-center mb-3">
                                         <div>
-                                            <p className="text-white font-black text-sm">{d.lottery_type} • {d.draw_time}</p>
-                                            <p className="text-[10px] text-gray-500">{formatDate(d.draw_date)}</p>
+                                            <p className="text-white font-bold">{draw.lottery_type}</p>
+                                            <p className="text-gray-400 text-sm">{draw.draw_time}</p>
                                         </div>
-                                        <button 
-                                            onClick={() => { 
-                                                setResultsDate(d.draw_date); 
-                                                setSelectedDraw(d.id);
-                                                setWinningNumber('');
-                                            }} 
-                                            className="text-[10px] font-black uppercase text-red-400 px-3 py-1 border border-red-400/30 rounded-lg"
-                                        >
-                                            Liquidar →
-                                        </button>
+                                        <span className="text-xs bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded-full">
+                                            Sin ganador
+                                        </span>
                                     </div>
-                                ))
-                            )}
+                                    
+                                    {selectedDraw?.id === draw.id ? (
+                                        <div className="space-y-3">
+                                            <input
+                                                type="text"
+                                                maxLength={2}
+                                                value={winningNumber}
+                                                onChange={(e) => setWinningNumber(e.target.value.replace(/[^0-9]/g, ''))}
+                                                placeholder="Número ganador (00-99)"
+                                                className="w-full p-3 bg-black/40 border border-white/10 rounded-xl text-white text-center text-2xl font-black"
+                                            />
+                                            <div className="flex gap-3">
+                                                <button
+                                                    onClick={() => setSelectedDraw(null)}
+                                                    className="flex-1 py-2 bg-white/10 rounded-xl text-gray-400"
+                                                >
+                                                    Cancelar
+                                                </button>
+                                                <button
+                                                    onClick={handleSetWinner}
+                                                    disabled={submitting || !winningNumber}
+                                                    className="flex-1 py-2 bg-emerald-600 rounded-xl text-white font-bold disabled:opacity-50"
+                                                >
+                                                    {submitting ? 'Guardando...' : 'Guardar Ganador'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => {
+                                                setSelectedDraw(draw);
+                                                setWinningNumber('');
+                                            }}
+                                            className="w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-xl text-white font-bold"
+                                        >
+                                            Ingresar Número Ganador
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Sorteos ya liquidados (con ganador) */}
+                {settledDraws.length > 0 && (
+                    <div>
+                        <h2 className="text-white font-black uppercase text-sm mb-3 flex items-center gap-2">
+                            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                            Sorteos Liquidados ({settledDraws.length})
+                        </h2>
+                        
+                        <div className="space-y-3">
+                            {settledDraws.map(draw => (
+                                <div key={draw.id} className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <p className="text-white font-bold">{draw.lottery_type} - {draw.draw_time}</p>
+                                            <p className="text-emerald-400 text-2xl font-black mt-1">
+                                                {draw.winning_number}
+                                            </p>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className={`text-xs px-3 py-1 rounded-full ${
+                                                draw.is_settled 
+                                                    ? 'bg-green-500/20 text-green-400' 
+                                                    : 'bg-yellow-500/20 text-yellow-400'
+                                            }`}>
+                                                {draw.is_settled ? '✅ Liquidado' : '⚠️ Por liquidar'}
+                                            </span>
+                                            {!draw.is_settled && draw.winning_number && (
+                                                <button
+                                                    onClick={() => handleLiquidate(draw)}
+                                                    disabled={submitting}
+                                                    className="block mt-2 text-xs text-emerald-400 font-bold"
+                                                >
+                                                    Liquidar premios →
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
+                )}
+
+                {/* Footer */}
+                <div className="text-center mt-8 pt-4 border-t border-white/10">
+                    <p className="text-gray-600 text-xs">© 2026 Tiempos Pro. Todos los derechos reservados.</p>
                 </div>
-            </section>
+            </div>
         </main>
     );
 }
