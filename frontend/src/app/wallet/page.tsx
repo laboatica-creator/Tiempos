@@ -1,7 +1,8 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../lib/api';
 import { formatTransactionDate, getCurrentCostaRicaDate } from '../../lib/dateUtils';
+import { useComprobanteOCR, DatosComprobante } from '../../components/ComprobanteOCR';
 
 type TabType = 'recharge' | 'withdraw' | 'history';
 
@@ -19,7 +20,14 @@ export default function WalletPage() {
     const [loading, setLoading] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
     
-    // 🔥 Filtros para historial
+    // OCR states
+    const { extraerDatos, processing, progress, error: ocrError } = useComprobanteOCR();
+    const [userPhone, setUserPhone] = useState('');
+    const [showOcrAlert, setShowOcrAlert] = useState(false);
+    const [ocrData, setOcrData] = useState<DatosComprobante | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    
+    // Filtros para historial
     const [startDate, setStartDate] = useState(getCurrentCostaRicaDate());
     const [endDate, setEndDate] = useState(getCurrentCostaRicaDate());
     const [filterType, setFilterType] = useState('ALL');
@@ -28,9 +36,9 @@ export default function WalletPage() {
     useEffect(() => {
         setIsMounted(true);
         fetchWalletData();
+        fetchUserData();
     }, []);
 
-    // 🔥 Filtrar transacciones cuando cambian los filtros
     useEffect(() => {
         filterTransactions();
     }, [transactions, startDate, endDate, filterType]);
@@ -60,10 +68,22 @@ export default function WalletPage() {
         }
     };
 
+    const fetchUserData = async () => {
+        const token = sessionStorage.getItem('token');
+        if (!token) return;
+        try {
+            const userData = await api.get('/user/profile', token);
+            if (userData && userData.phone_number) {
+                setUserPhone(userData.phone_number);
+            }
+        } catch (error) {
+            console.error('Error fetching user data:', error);
+        }
+    };
+
     const filterTransactions = () => {
         let filtered = [...transactions];
         
-        // Filtrar por rango de fechas
         if (startDate && endDate) {
             filtered = filtered.filter(tx => {
                 const txDate = tx.created_at.split('T')[0];
@@ -71,7 +91,6 @@ export default function WalletPage() {
             });
         }
         
-        // Filtrar por tipo
         if (filterType !== 'ALL') {
             filtered = filtered.filter(tx => {
                 if (filterType === 'DEPOSIT') return tx.type === 'DEPÓSITO SINPE' || tx.type === 'DEPÓSITO';
@@ -87,6 +106,35 @@ export default function WalletPage() {
         setFilteredTransactions(filtered);
     };
 
+    const handleFileShare = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        
+        const datos = await extraerDatos(file, userPhone);
+        if (datos) {
+            setOcrData(datos);
+            
+            // Pre-llenar el formulario
+            if (datos.referencia) setSinpeReference(datos.referencia);
+            if (datos.monto && datos.monto > 0) setSinpeAmount(datos.monto.toString());
+            
+            // Verificar si el teléfono del comprobante coincide con el teléfono registrado
+            const telefonoLimpio = datos.telefonoOrigen.replace(/\D/g, '');
+            const userPhoneLimpio = userPhone.replace(/\D/g, '');
+            
+            const esTercero = telefonoLimpio !== '' && userPhoneLimpio !== '' && telefonoLimpio !== userPhoneLimpio;
+            
+            if (esTercero) {
+                setShowOcrAlert(true);
+            } else if (telefonoLimpio !== '' && telefonoLimpio === userPhoneLimpio) {
+                alert('✅ Comprobante verificado. Los datos coinciden con tu cuenta.');
+            }
+        }
+        
+        // Limpiar el input para permitir subir el mismo archivo nuevamente
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
     const handleSinpeDeposit = async (e: React.FormEvent) => {
         e.preventDefault();
         const token = sessionStorage.getItem('token');
@@ -97,20 +145,33 @@ export default function WalletPage() {
             return;
         }
         
+        // Determinar si hay alerta de tercero
+        const thirdPartyAlert = showOcrAlert;
+        const sourcePhone = ocrData?.telefonoOrigen || '';
+        const sourceName = ocrData?.nombreOrigen || '';
+        
         try {
-            // 🔥 CORREGIDO: endpoint correcto es '/wallet/recharge'
             const res = await api.post('/wallet/recharge', {
                 amount: Number(sinpeAmount),
                 reference_number: sinpeReference,
-                bank_name: selectedSinpeBank
+                bank_name: selectedSinpeBank,
+                source_phone: sourcePhone,
+                source_name: sourceName,
+                third_party_alert: thirdPartyAlert
             }, token);
             
             if (res.error) {
                 alert(res.error);
             } else {
-                alert('✅ Solicitud de recarga enviada correctamente');
+                if (thirdPartyAlert) {
+                    alert('⚠️ ATENCIÓN: El comprobante pertenece a otra persona. Tu solicitud será revisada manualmente por el administrador en un plazo de 24-72 horas.');
+                } else {
+                    alert('✅ Solicitud de recarga enviada correctamente');
+                }
                 setSinpeAmount('');
                 setSinpeReference('');
+                setShowOcrAlert(false);
+                setOcrData(null);
                 fetchWalletData();
                 setActiveTab('history');
             }
@@ -215,6 +276,51 @@ export default function WalletPage() {
             {activeTab === 'recharge' && (
                 <div className="mx-4 mt-6 bg-white/5 rounded-2xl p-5 border border-white/10">
                     <h2 className="text-white font-black text-lg mb-4">📱 Recargar por SINPE</h2>
+                    
+                    {/* Botón para compartir comprobante */}
+                    <div className="mb-4">
+                        <label className="text-gray-400 text-xs font-black uppercase block mb-2">Compartir comprobante SINPE</label>
+                        <div className="flex gap-3">
+                            <label className="flex-1 py-3 bg-blue-600 rounded-xl text-white font-black text-center text-sm cursor-pointer transition-all hover:bg-blue-700">
+                                📎 Compartir comprobante
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*,application/pdf"
+                                    onChange={handleFileShare}
+                                    className="hidden"
+                                />
+                            </label>
+                        </div>
+                        {processing && (
+                            <div className="mt-2">
+                                <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full bg-emerald-500 transition-all duration-300"
+                                        style={{ width: `${progress}%` }}
+                                    />
+                                </div>
+                                <p className="text-gray-400 text-[10px] mt-1">Leyendo comprobante... {progress}%</p>
+                            </div>
+                        )}
+                        {ocrError && (
+                            <p className="text-red-400 text-[10px] mt-1">{ocrError}</p>
+                        )}
+                    </div>
+                    
+                    {/* Alerta de tercero */}
+                    {showOcrAlert && ocrData && (
+                        <div className="mb-4 bg-red-500/20 border border-red-500/50 rounded-xl p-3">
+                            <p className="text-red-400 font-black text-xs uppercase">⚠️ ATENCIÓN: SINPE DE TERCERO</p>
+                            <p className="text-gray-300 text-[10px] mt-1">
+                                El comprobante pertenece a: {ocrData.nombreOrigen || 'Desconocido'} ({ocrData.telefonoOrigen || 'Sin teléfono'})
+                            </p>
+                            <p className="text-gray-400 text-[9px] mt-1">
+                                Tu solicitud será revisada manualmente por el administrador.
+                            </p>
+                        </div>
+                    )}
+                    
                     <form onSubmit={handleSinpeDeposit} className="space-y-4">
                         <div>
                             <label className="text-gray-400 text-xs font-black uppercase block mb-2">Banco Destino</label>
@@ -319,7 +425,6 @@ export default function WalletPage() {
                 <div className="mx-4 mt-6 bg-white/5 rounded-2xl p-5 border border-white/10 mb-6">
                     <h2 className="text-white font-black text-lg mb-4">📋 Historial de Transacciones</h2>
                     
-                    {/* 🔥 Filtros de fecha y tipo */}
                     <div className="mb-4 space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                             <div>
