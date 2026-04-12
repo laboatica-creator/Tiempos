@@ -34,52 +34,66 @@ export function useComprobanteOCR() {
             const texto = result.data.text;
             console.log('📄 Texto OCR completo:', texto);
             
-            // Limpiar texto: reemplazar saltos de línea por espacios
-            const textoPlano = texto.replace(/\n/g, ' ').replace(/\s+/g, ' ');
-            console.log('📄 Texto plano:', textoPlano);
-            
-            // === REFERENCIA (8 dígitos como 95878163) ===
+            // === REFERENCIA ===
             let referencia = '';
-            const refMatch = textoPlano.match(/\b(\d{8})\b/);
+            const refMatch = texto.match(/\b(\d{8})\b/);
             if (refMatch) referencia = refMatch[1];
             
             // === MONTO ===
             let monto = 0;
-            const montoMatch = textoPlano.match(/(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)\s*Colones/);
+            const montoMatch = texto.match(/(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)\s*Colones/);
             if (montoMatch) {
                 monto = parseFloat(montoMatch[1].replace(/\./g, '').replace(',', '.'));
             }
             
             // === FECHA ===
             let fecha = '';
-            const fechaMatch = textoPlano.match(/(\d{2}\/\d{2}\/\d{4})/);
+            const fechaMatch = texto.match(/(\d{2}\/\d{2}\/\d{4})/);
             if (fechaMatch) fecha = fechaMatch[1];
             
-            // === TELÉFONO EMISOR (85571922) - viene después de "Monto acreditado" ===
+            // === TELÉFONO EMISOR ===
             let telefonoEmisor = '';
             const telEmisorMatch = texto.match(/Monto acreditado[,\s]*\n?\s*(\d+)/i);
             if (telEmisorMatch) telefonoEmisor = telEmisorMatch[1];
             
             // === TELÉFONO RECEPTOR ===
             let telefonoReceptor = '';
-            // Buscar después de "Destinatario"
-            const telReceptorMatch = texto.match(/Destinatario\s*\n?\s*(\d+)/i);
-            if (telReceptorMatch) telefonoReceptor = telReceptorMatch[1];
+            // Buscar después de "Destinatario" o "SINPE Móvil destino"
+            const telReceptorPatterns = [
+                /Destinatario\s*\n?\s*(\d+)/i,
+                /SINPE Móvil destino\s*(\d{4}[-]?\d{4})/i,
+                /A favor de\s*\n?\s*(\d+)/i
+            ];
+            for (const pattern of telReceptorPatterns) {
+                const match = texto.match(pattern);
+                if (match && match[1]) {
+                    telefonoReceptor = match[1].replace(/-/g, '');
+                    break;
+                }
+            }
             
-            // === NOMBRE EMISOR (RODRIGO NAJERA SANTAMARIA) ===
+            // === NOMBRE EMISOR ===
             let nombreEmisor = '';
             const nombreEmisorMatch = texto.match(/Realizado por\s*\n?\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]+?)(?:\n|$)/i);
             if (nombreEmisorMatch) nombreEmisor = nombreEmisorMatch[1].trim();
             
-            // === NOMBRE RECEPTOR (JORGE LUIS LESLI VEITCH) ===
+            // === NOMBRE RECEPTOR ===
             let nombreReceptor = '';
             const nombreReceptorMatch = texto.match(/Destinatario\s*\n?\s*([A-Za-zÁÉÍÓÚÑáéíóúñ\s]+?)(?:\n|$)/i);
             if (nombreReceptorMatch) nombreReceptor = nombreReceptorMatch[1].trim();
             
-            // === CONCEPTO ===
+            // === CONCEPTO (limpiar, quitar IBAN y números de cuenta) ===
             let concepto = '';
             const conceptMatch = texto.match(/Concepto:\s*(.+?)(?:\n|$)/i);
-            if (conceptMatch) concepto = conceptMatch[1].trim();
+            if (conceptMatch) {
+                concepto = conceptMatch[1].trim();
+                // Limpiar: eliminar IBAN y números largos
+                concepto = concepto.replace(/IBAN:\s*[A-Z0-9\s]+/i, '');
+                concepto = concepto.replace(/\b[A-Z]{2}\d{2}[A-Z0-9]{10,}\b/gi, '');
+                concepto = concepto.replace(/\s+/g, ' ').trim();
+                // Limitar a 50 caracteres
+                if (concepto.length > 50) concepto = concepto.substring(0, 50);
+            }
             
             // === BANCO ===
             let bancoDetectado = '';

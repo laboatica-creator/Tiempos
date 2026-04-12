@@ -255,13 +255,13 @@ export default function WalletPage() {
                         <div className="mb-4 bg-gray-800/50 rounded-xl p-3 border border-white/10">
                             <p className="text-emerald-400 text-[10px] font-black uppercase mb-2">📋 Datos extraídos del comprobante</p>
                             <div className="space-y-1 text-xs">
-                                {ocrData.bancoDetectado && <div><span className="text-gray-400">Banco:</span> <span className="text-white font-bold">{ocrData.bancoDetectado}</span></div>}
-                                {ocrData.fecha && <div><span className="text-gray-400">Fecha:</span> <span className="text-white">{ocrData.fecha}</span></div>}
-                                {ocrData.telefonoEmisor && <div><span className="text-gray-400">Teléfono emisor:</span> <span className="text-white">{ocrData.telefonoEmisor}</span></div>}
-                                {ocrData.telefonoReceptor && <div><span className="text-gray-400">Teléfono receptor:</span> <span className="text-white">{ocrData.telefonoReceptor}</span></div>}
-                                {ocrData.nombreEmisor && <div><span className="text-gray-400">Nombre emisor:</span> <span className="text-white">{ocrData.nombreEmisor}</span></div>}
-                                {ocrData.nombreReceptor && <div><span className="text-gray-400">Nombre receptor:</span> <span className="text-white">{ocrData.nombreReceptor}</span></div>}
-                                {ocrData.concepto && <div><span className="text-gray-400">Concepto:</span> <span className="text-white">{ocrData.concepto}</span></div>}
+                                {ocrData.bancoDetectado && <div><span className="text-gray-400">🏦 Banco:</span> <span className="text-white font-bold">{ocrData.bancoDetectado}</span></div>}
+                                {ocrData.fecha && <div><span className="text-gray-400">📅 Fecha:</span> <span className="text-white">{ocrData.fecha}</span></div>}
+                                {ocrData.telefonoEmisor && <div><span className="text-gray-400">📞 Teléfono emisor:</span> <span className="text-white">{ocrData.telefonoEmisor}</span></div>}
+                                {ocrData.telefonoReceptor && <div><span className="text-gray-400">📞 Teléfono receptor:</span> <span className="text-white">{ocrData.telefonoReceptor}</span></div>}
+                                {ocrData.nombreEmisor && <div><span className="text-gray-400">👤 Nombre emisor:</span> <span className="text-white">{ocrData.nombreEmisor}</span></div>}
+                                {ocrData.nombreReceptor && <div><span className="text-gray-400">👤 Nombre receptor:</span> <span className="text-white">{ocrData.nombreReceptor}</span></div>}
+                                {ocrData.concepto && <div><span className="text-gray-400">📝 Concepto:</span> <span className="text-white">{ocrData.concepto}</span></div>}
                             </div>
                         </div>
                     )}
