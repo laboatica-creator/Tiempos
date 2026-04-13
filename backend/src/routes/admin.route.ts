@@ -20,6 +20,13 @@ import { approveRecharge, rejectRecharge, getPendingRecharges, adjustWalletBalan
 import { exportDatabase, importDatabase } from '../controllers/backup.controller';
 import { authenticateJWT, requireRole, requirePermission } from '../middlewares/auth.middleware';
 import { setWinningNumber, cancelDraw, getSuggestedResults, liquidateDraw } from '../controllers/draw.controller';
+// 🔥 NUEVO: Importar controladores de vendedores
+import { 
+    getAllSellers, 
+    getAllSellersStats, 
+    toggleSellerStatus,
+    getSellerSalesDetail
+} from '../controllers/admin-seller.controller';
 
 const router = Router();
 
@@ -66,5 +73,18 @@ router.post('/draws/set-winner/:drawId', authenticateJWT, requirePermission('dra
 router.post('/draws/cancel/:drawId', authenticateJWT, requirePermission('draws'), cancelDraw);
 router.post('/draws/liquidate', authenticateJWT, requirePermission('draws'), liquidateDraw);
 router.get('/draws/suggested-results', authenticateJWT, requirePermission('draws'), getSuggestedResults);
+
+// ==================== 🔥 NUEVAS RUTAS DE VENDEDORES ====================
+// Obtener todos los vendedores
+router.get('/sellers', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), getAllSellers);
+
+// Obtener estadísticas de vendedores
+router.get('/sellers/stats', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), getAllSellersStats);
+
+// Activar/Desactivar vendedor
+router.post('/sellers/:sellerId/toggle-status', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), toggleSellerStatus);
+
+// Obtener ventas detalladas de un vendedor
+router.get('/sellers/:sellerId/sales', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), getSellerSalesDetail);
 
 export default router;
