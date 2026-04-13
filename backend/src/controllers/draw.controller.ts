@@ -6,6 +6,14 @@ import bcrypt from 'bcrypt';
 
 const PAYOUT_MULTIPLIER = 90;
 
+// 🔥 Función para determinar si un sorteo está abierto para apuestas (20 minutos antes)
+const isDrawOpenForBets = (drawTime: string, drawDate: string): boolean => {
+    const now = new Date();
+    const drawDateTime = new Date(`${drawDate}T${drawTime}:00`);
+    const closeTime = new Date(drawDateTime.getTime() - 20 * 60 * 1000);
+    return now <= closeTime;
+};
+
 export const createDraw = async (req: AuthRequest, res: Response) => {
     const { lottery_type, draw_date, draw_time, min_bet, max_bet, max_exposure_limit } = req.body;
     try {
@@ -61,7 +69,19 @@ export const getDraws = async (req: Request, res: Response) => {
 
         const result = await pool.query(query, params);
         
-        res.json(result.rows);
+        let draws = result.rows;
+        
+        // 🔥 Si se solicitan sorteos activos, filtrar por horario de cierre (20 minutos antes)
+        if (status === 'ACTIVE') {
+            draws = draws.filter(draw => {
+                const isOpen = isDrawOpenForBets(draw.draw_time, draw.draw_date);
+                draw.can_bet = isOpen;
+                return true;
+            });
+            console.log(`[DRAWS] Sorteos activos después de filtrar por horario: ${draws.length}`);
+        }
+        
+        res.json(draws);
     } catch (error) {
         console.error('Error fetching draws:', error);
         res.status(500).json({ error: 'Internal server error' });

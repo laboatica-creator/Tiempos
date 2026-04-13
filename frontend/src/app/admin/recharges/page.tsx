@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { api } from '../../../lib/api';
 import PrintButton from '../../../components/PrintButton';
@@ -27,38 +27,71 @@ export default function AdminRechargesPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [approvedReceipts, setApprovedReceipts] = useState<Record<string, any>>({});
   const [showOcrText, setShowOcrText] = useState<string | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [refreshCount, setRefreshCount] = useState(0);
 
-  useEffect(() => {
-    setIsMounted(true);
-    fetchRecharges();
-    
-    // 🔥 Auto-refresco cada 60 segundos
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        console.log('🔄 Auto-refresco de recargas pendientes...');
-        fetchRecharges();
-      }
-    }, 60000); // 60 segundos
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  const fetchRecharges = async () => {
+  // 🔥 Función fetchRecharges memoizada con useCallback
+  const fetchRecharges = useCallback(async () => {
     try {
       const token = sessionStorage.getItem('token');
-      if (!token) return;
+      if (!token) {
+        console.log('⏳ No hay token, saltando fetch');
+        return;
+      }
+      
+      console.log(`🔄 Refresco #${refreshCount + 1} - ${new Date().toLocaleTimeString()}`);
       const data = await api.get('/wallet/pending', token);
+      console.log('📦 Datos recibidos:', Array.isArray(data) ? `${data.length} registros` : data);
+      
       if (Array.isArray(data)) {
         setRecharges(data);
+        setLastRefresh(new Date());
+        setRefreshCount(prev => prev + 1);
       } else if (data && data.error) {
         console.error('Recharges Error:', data.error);
+      } else {
+        console.warn('⚠️ Datos no son array:', data);
+        setRecharges([]);
       }
     } catch (err) {
-      console.error(err);
+      console.error('❌ Error en fetchRecharges:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [refreshCount]);
+
+  useEffect(() => {
+    setIsMounted(true);
+    
+    // Carga inicial
+    fetchRecharges();
+    
+    // 🔥 Auto-refresco cada 60 segundos (más robusto)
+    const interval = setInterval(() => {
+      // Verificar si la pestaña está visible
+      if (document.visibilityState === 'visible') {
+        console.log('⏰ Auto-refresco programado (60s) - pestaña visible');
+        fetchRecharges();
+      } else {
+        console.log('⏸️ Auto-refresco omitido - pestaña no visible');
+      }
+    }, 60000); // 60 segundos
+    
+    // 🔥 Refresco adicional cuando la pestaña se vuelve visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('👁️ Pestaña visible nuevamente - refrescando...');
+        fetchRecharges();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchRecharges]);
 
   const handleApprove = async (r: Recharge) => {
     let mensaje = `¿Desea aprobar la recarga de ₡${Number(r.amount).toLocaleString()} para ${r.user_name}?`;
@@ -133,6 +166,9 @@ export default function AdminRechargesPage() {
           </div>
           <h1 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter">Depósitos SINPE Pendientes</h1>
           <p className="text-gray-400 font-bold text-sm mt-1">Verifica y aprueba las recargas de los jugadores</p>
+          <p className="text-emerald-500 text-[10px] mt-2 font-mono">
+            🔄 Auto-refresco cada 60s | Última actualización: {lastRefresh.toLocaleTimeString()}
+          </p>
         </div>
         <div className="h-12 w-12 md:h-16 md:w-16 bg-emerald-500/20 rounded-2xl flex items-center justify-center text-emerald-400 text-2xl md:text-3xl">
           💰
@@ -144,6 +180,7 @@ export default function AdminRechargesPage() {
       ) : recharges.length === 0 ? (
         <div className="glass-panel p-10 text-center border-white/5 rounded-2xl">
           <p className="text-gray-500">No hay depósitos pendientes.</p>
+          <p className="text-gray-600 text-xs mt-2">✅ Todo está al día</p>
         </div>
       ) : (
         <div className="space-y-4">
