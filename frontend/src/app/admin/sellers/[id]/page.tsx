@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api } from '../../../lib/api';
+import { api } from '../../../../lib/api';
 
 interface SellerDetail {
   id: string;
@@ -45,7 +45,6 @@ export default function SellerDetailPage() {
   const [period, setPeriod] = useState('today');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [showLiquidation, setShowLiquidation] = useState(false);
   const [commissionPercent, setCommissionPercent] = useState(10);
   const [liquidationResult, setLiquidationResult] = useState<any>(null);
 
@@ -109,7 +108,7 @@ export default function SellerDetailPage() {
         setLiquidationResult({ error: data.error, shortfall: data.shortfall });
       } else {
         setLiquidationResult(data);
-        alert(`✅ Liquidación calculada: Ventas ₡${data.total_sales.toLocaleString()}, Comisión ₡${data.commission_amount.toLocaleString()}, Neto a pagar ₡${data.net_amount.toLocaleString()}`);
+        alert(`✅ Liquidación calculada: Ventas ₡${data.summary.total_sales.toLocaleString()}, Comisión ₡${data.summary.commission_amount.toLocaleString()}, Neto ₡${data.summary.net_to_seller.toLocaleString()}`);
       }
     } catch (err) {
       alert('Error al liquidar');
@@ -144,7 +143,6 @@ export default function SellerDetailPage() {
   return (
     <div className="min-h-screen bg-[#0f172a] p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
         <div className="flex justify-between items-center">
           <div>
             <Link href="/admin/sellers" className="text-emerald-400 text-sm">← Volver a Vendedores</Link>
@@ -156,7 +154,6 @@ export default function SellerDetailPage() {
           </div>
         </div>
 
-        {/* Filtros */}
         <div className="bg-[#1e293b] rounded-2xl p-6">
           <h3 className="text-white font-bold mb-4">📅 Filtros de Ventas</h3>
           <div className="flex flex-wrap gap-4">
@@ -195,7 +192,6 @@ export default function SellerDetailPage() {
           </div>
         </div>
 
-        {/* Totales */}
         <div className="grid grid-cols-3 gap-4">
           <div className="bg-[#1e293b] rounded-2xl p-6 text-center">
             <p className="text-gray-400 text-xs uppercase">Total Apuestas</p>
@@ -211,7 +207,6 @@ export default function SellerDetailPage() {
           </div>
         </div>
 
-        {/* Sección de Liquidación */}
         <div className="bg-gradient-to-r from-emerald-900/30 to-blue-900/30 rounded-2xl p-6 border border-emerald-500/30">
           <h3 className="text-white font-bold mb-4">💰 Liquidación de Ventas</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -253,16 +248,10 @@ export default function SellerDetailPage() {
           {liquidationResult?.error && (
             <div className="mt-4 p-4 bg-red-500/20 border border-red-500/50 rounded-xl">
               <p className="text-red-400 font-bold">⚠️ {liquidationResult.error}</p>
-              {liquidationResult.shortfall && (
-                <p className="text-white text-sm mt-2">
-                  El vendedor debe pagar adicionalmente: <span className="text-red-400 font-bold">₡{liquidationResult.shortfall.toLocaleString()}</span>
-                </p>
-              )}
             </div>
           )}
         </div>
 
-        {/* Tabla de Apuestas */}
         <div className="bg-[#1e293b] rounded-2xl overflow-hidden">
           <h3 className="text-white font-bold p-6 pb-0">📋 Apuestas Realizadas</h3>
           <div className="overflow-x-auto">
