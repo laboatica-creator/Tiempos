@@ -33,8 +33,6 @@ interface SalesSummary {
 export default function SellerDashboard() {
   const [draws, setDraws] = useState<Draw[]>([]);
   const [selectedDraw, setSelectedDraw] = useState<Draw | null>(null);
-  const [playerName, setPlayerName] = useState('');
-  const [playerPhone, setPlayerPhone] = useState('');
   const [selectedNumber, setSelectedNumber] = useState('');
   const [amount, setAmount] = useState(200);
   const [loteriaType, setLoteriaType] = useState<'TICA' | 'NICA'>('TICA');
@@ -46,8 +44,6 @@ export default function SellerDashboard() {
   const [success, setSuccess] = useState('');
   
   const router = useRouter();
-
-  // Montos predefinidos
   const amounts = [200, 500, 1000, 5000];
 
   useEffect(() => {
@@ -75,7 +71,6 @@ export default function SellerDashboard() {
       const data = await api.get('/seller/draws', token);
       if (Array.isArray(data)) {
         setDraws(data);
-        // Seleccionar el primer sorteo abierto
         const openDraw = data.find(d => d.is_open);
         if (openDraw) setSelectedDraw(openDraw);
       }
@@ -106,14 +101,6 @@ export default function SellerDashboard() {
       setError('Seleccione un sorteo');
       return;
     }
-    if (!playerName.trim()) {
-      setError('Ingrese el nombre del jugador');
-      return;
-    }
-    if (!playerPhone.trim()) {
-      setError('Ingrese el teléfono del jugador');
-      return;
-    }
     if (!selectedNumber) {
       setError('Seleccione un número');
       return;
@@ -130,8 +117,8 @@ export default function SellerDashboard() {
     try {
       const token = sessionStorage.getItem('token');
       const data = await api.post('/seller/cash-bet', {
-        player_name: playerName,
-        player_phone: playerPhone,
+        player_name: 'Jugador en efectivo',
+        player_phone: '00000000',
         number: selectedNumber,
         amount: amount,
         draw_id: selectedDraw.id,
@@ -144,16 +131,11 @@ export default function SellerDashboard() {
         setSuccess(`✅ Apuesta registrada: ${selectedNumber} por ₡${amount.toLocaleString()}`);
         setShowTicket(data.bet);
         
-        // Limpiar formulario
-        setPlayerName('');
-        setPlayerPhone('');
         setSelectedNumber('');
         setAmount(200);
         
-        // Actualizar ventas del día
         fetchTodaySales();
         
-        // Auto-ocultar mensaje después de 3 segundos
         setTimeout(() => setSuccess(''), 3000);
         setTimeout(() => setShowTicket(null), 5000);
       }
@@ -189,8 +171,7 @@ export default function SellerDashboard() {
           <div>Número: <strong>${showTicket.number}</strong></div>
           <div>Monto: ₡${showTicket.amount.toLocaleString()}</div>
           <div>Lotería: ${showTicket.loteria_type}</div>
-          <div>Jugador: ${playerName}</div>
-          <div>Teléfono: ${playerPhone}</div>
+          <div>Jugador: Jugador en efectivo</div>
           <div>Fecha: ${new Date().toLocaleString()}</div>
           <div class="footer">¡Buena suerte!</div>
         </div>
@@ -206,12 +187,10 @@ export default function SellerDashboard() {
     }
   };
 
-  // Generar números del 00 al 99 en 7 columnas
   const numbers = Array.from({ length: 100 }, (_, i) => i.toString().padStart(2, '0'));
 
   return (
     <div className="min-h-screen bg-[#0f172a]">
-      {/* Header */}
       <header className="bg-[#1e293b] p-4 sticky top-0 z-10 shadow-lg">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div>
@@ -234,7 +213,6 @@ export default function SellerDashboard() {
       </header>
 
       <div className="max-w-7xl mx-auto p-4 space-y-6">
-        {/* Alertas */}
         {error && (
           <div className="bg-red-500/20 border border-red-500/50 rounded-xl p-4 text-red-400 font-bold">
             🚫 {error}
@@ -246,7 +224,6 @@ export default function SellerDashboard() {
           </div>
         )}
 
-        {/* Selector de sorteo y tipo de lotería */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-[#1e293b] rounded-xl p-4">
             <label className="text-gray-400 text-xs uppercase font-black">Sorteo</label>
@@ -319,31 +296,6 @@ export default function SellerDashboard() {
           </div>
         </div>
 
-        {/* Datos del jugador */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-[#1e293b] rounded-xl p-4">
-            <label className="text-gray-400 text-xs uppercase font-black">Nombre del Jugador</label>
-            <input
-              type="text"
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              placeholder="Nombre completo"
-              className="w-full mt-1 bg-[#0f172a] border border-white/10 rounded-lg p-3 text-white"
-            />
-          </div>
-          <div className="bg-[#1e293b] rounded-xl p-4">
-            <label className="text-gray-400 text-xs uppercase font-black">Teléfono del Jugador</label>
-            <input
-              type="tel"
-              value={playerPhone}
-              onChange={(e) => setPlayerPhone(e.target.value)}
-              placeholder="+506 8888-8888"
-              className="w-full mt-1 bg-[#0f172a] border border-white/10 rounded-lg p-3 text-white"
-            />
-          </div>
-        </div>
-
-        {/* Grid de números */}
         <div className="bg-[#1e293b] rounded-xl p-4">
           <h3 className="text-white font-bold mb-4">Seleccione un número</h3>
           <div className="grid grid-cols-7 gap-2">
@@ -363,7 +315,6 @@ export default function SellerDashboard() {
           </div>
         </div>
 
-        {/* Botón de registrar */}
         <button
           onClick={handlePlaceBet}
           disabled={loading || !selectedDraw?.is_open}
@@ -376,7 +327,6 @@ export default function SellerDashboard() {
           {loading ? '🔄 Registrando...' : '💰 REGISTRAR APUESTA EN EFECTIVO'}
         </button>
 
-        {/* Resumen de ventas del día */}
         {salesSummary && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-[#1e293b] rounded-xl p-4 text-center">
@@ -398,7 +348,6 @@ export default function SellerDashboard() {
           </div>
         )}
 
-        {/* Apuestas recientes */}
         {recentBets.length > 0 && (
           <div className="bg-[#1e293b] rounded-xl p-4">
             <h3 className="text-white font-bold mb-3">📋 Apuestas recientes</h3>
@@ -420,7 +369,6 @@ export default function SellerDashboard() {
         )}
       </div>
 
-      {/* Modal de ticket para imprimir */}
       {showTicket && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-white text-black rounded-2xl p-6 max-w-sm w-full text-center">
@@ -432,14 +380,6 @@ export default function SellerDashboard() {
             <div className="my-2">
               <p className="text-gray-500 text-sm">Monto</p>
               <p className="text-2xl font-bold">₡{showTicket.amount.toLocaleString()}</p>
-            </div>
-            <div className="my-2">
-              <p className="text-gray-500 text-sm">Jugador</p>
-              <p className="font-bold">{playerName}</p>
-            </div>
-            <div className="my-2">
-              <p className="text-gray-500 text-sm">Teléfono</p>
-              <p>{playerPhone}</p>
             </div>
             <div className="my-4 pt-4 border-t">
               <button

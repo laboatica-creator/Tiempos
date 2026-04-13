@@ -40,7 +40,6 @@ export default function AdminDashboardPage() {
         return;
       }
 
-      // 🔥 IMPORTANTE: Mapeo exacto de las claves del backend (snake_case) a las del estado (camelCase)
       const statsData = await api.get('/admin/reports/dashboard', token);
       const drawsData = await api.get('/draws', token);
 
@@ -60,7 +59,6 @@ export default function AdminDashboardPage() {
       }
 
       if (Array.isArray(drawsData)) {
-        // Solo mostrar los activos/cerrados en el mini-visor del dashboard
         setDraws(drawsData.filter(d => d.status === 'OPEN' || d.status === 'CLOSED').slice(0, 5));
       }
     } catch (err) {
@@ -79,8 +77,9 @@ export default function AdminDashboardPage() {
     { label: 'Retiros Pendientes', value: stats.pendingWithdrawals, icon: '💸', color: 'from-orange-500 to-orange-700', link: '/admin/withdrawals', alert: stats.pendingWithdrawals > 0 }
   ];
 
+  // 🔥 QUICK ACTIONS MODIFICADO: Eliminado "Gestionar Jugadores", agregado "Gestión de Vendedores"
   const quickActions = [
-    { label: 'Gestionar Jugadores', path: '/admin/players', icon: '👤', desc: 'Ver, editar y activar usuarios' },
+    { label: '🏪 Gestión de Vendedores', path: '/admin/sellers', icon: '🏪', desc: 'Supervisar ventas y rendimiento' },
     { label: 'Sorteos y Resultados', path: '/admin/results', icon: '🎰', desc: 'Definir ganadores y controlar ventas' },
     { label: 'Verificar Depósitos', path: '/admin/recharges', icon: '💳', desc: 'Aprobar recargas SINPE' },
     { label: 'Procesar Retiros', path: '/admin/withdrawals', icon: '💵', desc: 'Transferir dinero a ganadores' },
@@ -90,11 +89,10 @@ export default function AdminDashboardPage() {
 
   return (
     <main className="min-h-screen bg-[#0f172a] p-4 lg:p-8 space-y-8 pb-32">
-      {/* Header */}
       <header className="flex justify-between items-center text-white">
         <div>
           <h1 className="text-3xl font-black uppercase tracking-tighter italic">Centro de Control</h1>
-          <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mt-1">Gesti&oacute;n General del Sistema</p>
+          <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mt-1">Gestión General del Sistema</p>
         </div>
         <button 
             onClick={() => fetchData()}
@@ -111,7 +109,6 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      {/* Grid de Estadísticas */}
       <section className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {statCards.map((card, i) => (
           <div key={i} className={`relative overflow-hidden group p-5 rounded-3xl border border-white/5 bg-gradient-to-br transition-all hover:scale-[1.03] ${card.alert ? 'animate-pulse border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.1)]' : ''}`}>
@@ -134,7 +131,6 @@ export default function AdminDashboardPage() {
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Acciones Rápidas (Menú Limpio) */}
         <section className="lg:col-span-8 space-y-6">
             <h2 className="text-white font-black uppercase text-xs tracking-widest ml-1">Atajos de Administración</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -153,7 +149,6 @@ export default function AdminDashboardPage() {
             </div>
         </section>
 
-        {/* Mini visor de Sorteos */}
         <section className="lg:col-span-4 space-y-6">
             <h2 className="text-white font-black uppercase text-xs tracking-widest ml-1">Sorteos Próximos</h2>
             <div className="bg-white/5 rounded-[2.5rem] p-6 border border-white/5 space-y-4">
