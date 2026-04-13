@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { pool } from '../index';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkey_tiempos_prod_2026';
 
@@ -13,18 +14,50 @@ export interface AuthRequest extends Request {
     };
 }
 
-export const authenticateJWT = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authenticateJWT = async (req: AuthRequest, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.split(' ')[1];
 
-        jwt.verify(token, JWT_SECRET, (err: any, decoded: any) => {
+        jwt.verify(token, JWT_SECRET, async (err: any, decoded: any) => {
             if (err) {
                 return res.status(403).json({ error: 'Token is not valid or has expired.' });
             }
+            
             req.user = decoded;
-            next();
+            
+            // 🔥 VERIFICAR SESIÓN ÚNICA: obtener session_token del header
+            const clientSessionToken = req.headers['x-session-token'];
+            
+            if (!clientSessionToken) {
+                return res.status(401).json({ error: 'Sesión no válida. Inicie sesión nuevamente.' });
+            }
+            
+            // 🔥 Verificar que el session_token coincida con el guardado en BD
+            try {
+                const result = await pool.query(
+                    `SELECT session_token FROM users WHERE id = $1`,
+                    [decoded.id]
+                );
+                
+                if (result.rows.length === 0) {
+                    return res.status(401).json({ error: 'Usuario no encontrado.' });
+                }
+                
+                const dbSessionToken = result.rows[0].session_token;
+                
+                if (!dbSessionToken || dbSessionToken !== clientSessionToken) {
+                    return res.status(401).json({ 
+                        error: '⚠️ Sesión cerrada en otro dispositivo. Inicie sesión nuevamente.' 
+                    });
+                }
+                
+                next();
+            } catch (dbError) {
+                console.error('Error verificando session_token:', dbError);
+                return res.status(500).json({ error: 'Error interno al validar sesión.' });
+            }
         });
     } else {
         res.status(401).json({ error: 'Authorization header is missing or invalid.' });
@@ -63,7 +96,6 @@ export const requirePermission = (permission: string) => {
         }
 
         try {
-            const { pool } = require('../index'); 
             const userRes = await pool.query('SELECT permissions, is_master FROM users WHERE id = $1', [req.user.id]);
             if (userRes.rows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado.' });
             
