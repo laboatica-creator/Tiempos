@@ -49,9 +49,15 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 router.delete('/:id', async (req: Request, res: Response) => {
+  const promotionId = req.params.id;
   try {
-    await pool.query('DELETE FROM promotions WHERE id = $1', [req.params.id]);
-    res.json({ success: true });
+    // 🔥 Primero eliminar las aplicaciones de esta promoción (evita error de clave foránea)
+    await pool.query('DELETE FROM promotion_applications WHERE promotion_id = $1', [promotionId]);
+    
+    // 🔥 Luego eliminar la promoción
+    await pool.query('DELETE FROM promotions WHERE id = $1', [promotionId]);
+    
+    res.json({ success: true, message: 'Promoción eliminada correctamente' });
   } catch (err: any) {
     console.error('Error deleting promotion:', err);
     res.status(500).json({ error: 'Error al eliminar promoción', details: err.message });
