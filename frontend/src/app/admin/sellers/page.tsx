@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { api } from '../../../lib/api';
 
 interface Seller {
@@ -26,10 +27,10 @@ interface SellerStats {
 }
 
 export default function AdminSellersPage() {
+  const router = useRouter();
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [stats, setStats] = useState<SellerStats[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedSeller, setSelectedSeller] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSellers();
@@ -62,7 +63,8 @@ export default function AdminSellersPage() {
     }
   };
 
-  const toggleSellerStatus = async (sellerId: string, currentStatus: boolean) => {
+  const toggleSellerStatus = async (sellerId: string, currentStatus: boolean, e: React.MouseEvent) => {
+    e.stopPropagation(); // Evitar que el clic en el botón active el clic de la fila
     try {
       const token = sessionStorage.getItem('token');
       const data = await api.post(`/admin/sellers/${sellerId}/toggle-status`, { is_active: !currentStatus }, token);
@@ -72,6 +74,10 @@ export default function AdminSellersPage() {
     } catch (err) {
       console.error('Error toggling seller status:', err);
     }
+  };
+
+  const handleRowClick = (sellerId: string) => {
+    router.push(`/admin/sellers/${sellerId}`);
   };
 
   return (
@@ -94,6 +100,7 @@ export default function AdminSellersPage() {
       ) : sellers.length === 0 ? (
         <div className="bg-[#1e293b] p-10 text-center rounded-2xl">
           <p className="text-gray-500">No hay vendedores registrados aún.</p>
+          <p className="text-gray-600 text-sm mt-2">Los usuarios que se registren como "Vendedor" aparecerán aquí.</p>
         </div>
       ) : (
         <>
@@ -116,7 +123,11 @@ export default function AdminSellersPage() {
                   {sellers.map((seller) => {
                     const sellerStats = stats.find(s => s.seller_id === seller.id);
                     return (
-                      <tr key={seller.id} className="border-t border-white/5 hover:bg-white/5 transition-colors">
+                      <tr 
+                        key={seller.id} 
+                        onClick={() => handleRowClick(seller.id)}
+                        className="border-t border-white/5 hover:bg-white/5 transition-colors cursor-pointer"
+                      >
                         <td className="p-4">
                           <p className="text-white font-bold">{seller.full_name}</p>
                           <p className="text-gray-500 text-xs">Registro: {new Date(seller.created_at).toLocaleDateString()}</p>
@@ -144,7 +155,7 @@ export default function AdminSellersPage() {
                         </td>
                         <td className="p-4 text-center">
                           <button
-                            onClick={() => toggleSellerStatus(seller.id, seller.is_active)}
+                            onClick={(e) => toggleSellerStatus(seller.id, seller.is_active, e)}
                             className={`px-3 py-1 rounded-lg text-xs font-bold ${seller.is_active ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'}`}
                           >
                             {seller.is_active ? 'Desactivar' : 'Activar'}

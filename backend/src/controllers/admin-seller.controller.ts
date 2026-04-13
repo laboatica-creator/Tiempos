@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { pool } from '../index';
 import { AuthRequest } from '../middlewares/auth.middleware';
 
-// Obtener todos los vendedores
+// ==================== OBTENER VENDEDORES ====================
 export const getAllSellers = async (req: AuthRequest, res: Response) => {
     try {
         const result = await pool.query(`
@@ -19,7 +19,7 @@ export const getAllSellers = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Obtener estadísticas de todos los vendedores
+// ==================== ESTADÍSTICAS DE VENDEDORES ====================
 export const getAllSellersStats = async (req: AuthRequest, res: Response) => {
     try {
         // Ventas de hoy por vendedor
@@ -72,12 +72,12 @@ export const getAllSellersStats = async (req: AuthRequest, res: Response) => {
             return {
                 seller_id: seller.id,
                 seller_name: seller.full_name,
-                total_sales_today: today?.total_sales || 0,
-                total_bets_today: today?.total_bets || 0,
-                total_sales_week: week?.total_sales || 0,
-                total_bets_week: week?.total_bets || 0,
-                total_sales_month: month?.total_sales || 0,
-                total_bets_month: month?.total_bets || 0
+                total_sales_today: Number(today?.total_sales) || 0,
+                total_bets_today: Number(today?.total_bets) || 0,
+                total_sales_week: Number(week?.total_sales) || 0,
+                total_bets_week: Number(week?.total_bets) || 0,
+                total_sales_month: Number(month?.total_sales) || 0,
+                total_bets_month: Number(month?.total_bets) || 0
             };
         });
         
@@ -88,7 +88,7 @@ export const getAllSellersStats = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Activar/Desactivar vendedor
+// ==================== ACTIVAR/DESACTIVAR VENDEDOR ====================
 export const toggleSellerStatus = async (req: AuthRequest, res: Response) => {
     const { sellerId } = req.params;
     const { is_active } = req.body;
@@ -116,7 +116,7 @@ export const toggleSellerStatus = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Obtener ventas detalladas de un vendedor específico
+// ==================== VENTAS DETALLADAS DE UN VENDEDOR ====================
 export const getSellerSalesDetail = async (req: AuthRequest, res: Response) => {
     const { sellerId } = req.params;
     const { period = 'today', start_date, end_date } = req.query;
@@ -166,5 +166,170 @@ export const getSellerSalesDetail = async (req: AuthRequest, res: Response) => {
     } catch (error) {
         console.error('Error al obtener ventas del vendedor:', error);
         res.status(500).json({ error: 'Error al obtener ventas' });
+    }
+};
+
+// ==================== LIQUIDAR VENDEDOR ====================
+export const liquidateSeller = async (req: AuthRequest, res: Response) => {
+    const { seller_id, start_date, end_date, commission_percentage } = req.body;
+    const adminId = req.user?.id;
+    
+    // Validaciones
+    if (!seller_id || !start_date || !end_date) {
+        return res.status(400).json({ error: 'Faltan datos requeridos' });
+    }
+    
+    if (!commission_percentage || commission_percentage < 0 || commission_percentage > 100) {
+        return res.status(400).json({ error: 'Porcentaje de comisión inválido (0-100)' });
+    }
+    
+    try {
+        // Obtener ventas del período
+        const salesResult = await pool.query(`
+            SELECT 
+                COALESCE(SUM(amount), 0) as total_sales,
+                COALESCE(SUM(prize_amount), 0) as total_prizes
+            FROM bets
+            WHERE seller_id = $1 
+            AND DATE(created_at) BETWEEN $2 AND $3
+            AND status = 'active'
+        `, [seller_id, start_date, end_date]);
+        
+        const totalSales = parseFloat(salesResult.rows[0].total_sales);
+        const totalPrizes = parseFloat(salesResult.rows[0].total_prizes);
+        const commissionAmount = totalSales * (commission_percentage / 100);
+        
+        // Verificar si las ventas cubren los premios
+        if (totalPrizes > totalSales) {
+            const shortfall = totalPrizes - totalSales;
+            return res.status(400).json({ 
+                error: `⚠️ ALERTA: Los premios (₡${totalPrizes.toLocaleString()}) superan las ventas (₡${totalSales.toLocaleString()}). El vendedor debe pagar ₡${shortfall.toLocaleString()} adicionales.`,
+                shortfall: shortfall,
+                total_sales: totalSales,
+                total_prizes: totalPrizes,
+                commission_percentage: commission_percentage,
+                commission_amount: commissionAmount
+            });
+        }
+        
+        const netToSeller = totalSales - totalPrizes - commissionAmount;
+        
+        // Guardar liquidación
+        const liquidation = await pool.query(`
+            INSERT INTO seller_liquidations (
+                seller_id, admin_id, start_date, end_date, 
+                total_sales, total_prizes, commission_percentage, 
+                commission_amount, net_amount, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
+            RETURNING *
+        `, [seller_id, adminId, start_date, end_date, totalSales, totalPrizes, 
+            commission_percentage, commissionAmount, netToSeller]);
+        
+        res.json({
+            success: true,
+            liquidation: liquidation.rows[0],
+            summary: {
+                total_sales: totalSales,
+                total_prizes: totalPrizes,
+                commission_percentage: commission_percentage,
+                commission_amount: commissionAmount,
+                net_to_seller: netToSeller
+            }
+        });
+    } catch (error) {
+        console.error('Error al liquidar:', error);
+        res.status(500).json({ error: 'Error al liquidar ventas' });
+    }
+};
+
+// ==================== PAGAR PREMIO DE UNA APUESTA ====================
+export const payPrize = async (req: AuthRequest, res: Response) => {
+    const { betId } = req.params;
+    
+    try {
+        // Verificar la apuesta
+        const betCheck = await pool.query(`
+            SELECT id, status, prize_amount, prize_paid
+            FROM bets
+            WHERE id = $1
+        `, [betId]);
+        
+        if (betCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Apuesta no encontrada' });
+        }
+        
+        const bet = betCheck.rows[0];
+        
+        if (bet.status !== 'won') {
+            return res.status(400).json({ error: 'Esta apuesta no es ganadora' });
+        }
+        
+        if (bet.prize_paid) {
+            return res.status(400).json({ error: 'Este premio ya fue pagado' });
+        }
+        
+        // Marcar como pagado
+        const result = await pool.query(`
+            UPDATE bets 
+            SET prize_paid = true, prize_paid_at = NOW()
+            WHERE id = $1 AND status = 'won'
+            RETURNING *
+        `, [betId]);
+        
+        res.json({ 
+            success: true, 
+            message: `Premio de ₡${bet.prize_amount.toLocaleString()} pagado correctamente`,
+            bet: result.rows[0]
+        });
+    } catch (error) {
+        console.error('Error al pagar premio:', error);
+        res.status(500).json({ error: 'Error al pagar premio' });
+    }
+};
+
+// ==================== OBTENER LIQUIDACIONES DE UN VENDEDOR ====================
+export const getSellerLiquidations = async (req: AuthRequest, res: Response) => {
+    const { sellerId } = req.params;
+    
+    try {
+        const result = await pool.query(`
+            SELECT l.*, a.full_name as admin_name
+            FROM seller_liquidations l
+            LEFT JOIN users a ON l.admin_id = a.id
+            WHERE l.seller_id = $1
+            ORDER BY l.created_at DESC
+        `, [sellerId]);
+        
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error al obtener liquidaciones:', error);
+        res.status(500).json({ error: 'Error al obtener liquidaciones' });
+    }
+};
+
+// ==================== MARCAR LIQUIDACIÓN COMO PAGADA ====================
+export const markLiquidationPaid = async (req: AuthRequest, res: Response) => {
+    const { liquidationId } = req.params;
+    
+    try {
+        const result = await pool.query(`
+            UPDATE seller_liquidations 
+            SET status = 'paid', paid_at = NOW()
+            WHERE id = $1
+            RETURNING *
+        `, [liquidationId]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Liquidación no encontrada' });
+        }
+        
+        res.json({ 
+            success: true, 
+            message: 'Liquidación marcada como pagada',
+            liquidation: result.rows[0]
+        });
+    } catch (error) {
+        console.error('Error al marcar liquidación:', error);
+        res.status(500).json({ error: 'Error al actualizar liquidación' });
     }
 };
