@@ -35,7 +35,14 @@ export default function LoginPage() {
       if (data.error) {
         setError(data.error);
       } else {
+        // 🔥 Guardar token JWT
         sessionStorage.setItem('token', data.token);
+        
+        // 🔥 NUEVO: Guardar session_token para validación de sesión única
+        if (data.session_token) {
+          sessionStorage.setItem('session_token', data.session_token);
+        }
+        
         sessionStorage.setItem('user', JSON.stringify(data.user));
         
         if (data.user.role === 'ADMIN' || data.user.role === 'FRANCHISE') {
