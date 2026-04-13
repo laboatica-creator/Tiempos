@@ -31,6 +31,16 @@ export default function AdminRechargesPage() {
   useEffect(() => {
     setIsMounted(true);
     fetchRecharges();
+    
+    // 🔥 Auto-refresco cada 60 segundos
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        console.log('🔄 Auto-refresco de recargas pendientes...');
+        fetchRecharges();
+      }
+    }, 60000); // 60 segundos
+    
+    return () => clearInterval(interval);
   }, []);
 
   const fetchRecharges = async () => {
