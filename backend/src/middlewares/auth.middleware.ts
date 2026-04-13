@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { pool } from '../index';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkey_tiempos_prod_2026';
 
@@ -64,6 +63,7 @@ export const requirePermission = (permission: string) => {
         }
 
         try {
+            const { pool } = require('../index'); 
             const userRes = await pool.query('SELECT permissions, is_master FROM users WHERE id = $1', [req.user.id]);
             if (userRes.rows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado.' });
             

@@ -132,12 +132,7 @@ export const loginUser = async (req: Request, res: Response) => {
             return res.status(401).json({ error: 'Credenciales inválidas.' });
         }
 
-        // 🔥 Verificar si ya hay una sesión activa en otro dispositivo
-        if (user.session_token) {
-            return res.status(401).json({ 
-                error: '⚠️ Ya hay una sesión activa en otro dispositivo. Cierre sesión allí primero.' 
-            });
-        }
+        // 🔥 ELIMINADO: Verificación de session_token activa en otro dispositivo
 
         // Generate JWT
         const token = jwt.sign(
@@ -153,18 +148,12 @@ export const loginUser = async (req: Request, res: Response) => {
             { expiresIn: '24h' }
         );
 
-        // 🔥 Generar session_token único y guardar en BD
-        const sessionToken = uuidv4();
-        await pool.query(
-            `UPDATE users SET session_token = $1, session_created_at = NOW() WHERE id = $2`,
-            [sessionToken, user.id]
-        );
+        // 🔥 ELIMINADO: Generar y guardar session_token en BD
 
-        // 🔥 Devolver el session_token al frontend
+        // 🔥 Respuesta SIN session_token
         res.json({
             message: 'Login successful',
             token,
-            session_token: sessionToken,  // 🔥 ESTA ES LA LÍNEA QUE FALTABA
             user: {
                 id: user.id,
                 full_name: user.full_name,
