@@ -160,9 +160,11 @@ export const loginUser = async (req: Request, res: Response) => {
             [sessionToken, user.id]
         );
 
+        // 🔥 Devolver el session_token al frontend
         res.json({
             message: 'Login successful',
             token,
+            session_token: sessionToken,  // 🔥 ESTA ES LA LÍNEA QUE FALTABA
             user: {
                 id: user.id,
                 full_name: user.full_name,
