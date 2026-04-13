@@ -9,6 +9,7 @@ import Logo from '@/components/Logo';
 export default function RegisterPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [franchises, setFranchises] = useState<any[]>([]);
+  const [selectedRole, setSelectedRole] = useState<'CUSTOMER' | 'SELLER'>('CUSTOMER');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -70,8 +71,8 @@ export default function RegisterPage() {
         phone_number: formData.phone,
         date_of_birth: formData.date_of_birth,
         password: formData.password,
-        role: 'CUSTOMER',
-        franchise_id: formData.franchise_id || null // NULL means master admin
+        role: selectedRole, // 🔥 AHORA USA EL ROL SELECCIONADO
+        franchise_id: formData.franchise_id || null
       };
 
       const data = await api.post('/auth/register', dataToSend);
@@ -81,7 +82,13 @@ export default function RegisterPage() {
       } else {
         sessionStorage.setItem('token', data.token);
         sessionStorage.setItem('user', JSON.stringify(data.user));
-        router.push('/betting');
+        
+        // 🔥 Redirigir según el rol
+        if (selectedRole === 'SELLER') {
+          router.push('/seller/dashboard');
+        } else {
+          router.push('/betting');
+        }
       }
     } catch (err) {
       setError('Error de conexión con el servidor.');
@@ -93,7 +100,6 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[#0f172a]">
       <div className="glass-panel w-full max-w-2xl p-8 animate-in fade-in zoom-in duration-500 border-emerald-500/20 shadow-2xl shadow-emerald-500/10 transform transition-all duration-500 relative overflow-hidden group">
-        {/* Animated Background Element */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -mr-32 -mt-32 group-hover:bg-emerald-500/10 transition-colors"></div>
         
         <div className="flex justify-center mb-6 relative z-10">
@@ -108,6 +114,41 @@ export default function RegisterPage() {
         )}
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+          
+          {/* 🔥 NUEVO: Selector de rol - Jugador o Vendedor */}
+          <div className="md:col-span-2 space-y-2">
+            <label className="text-xs font-black uppercase text-gray-400 ml-1">Quiero registrarme como:</label>
+            <div className="flex gap-4">
+              <button
+                type="button"
+                onClick={() => setSelectedRole('CUSTOMER')}
+                className={`flex-1 py-3 rounded-xl font-bold transition-all ${
+                  selectedRole === 'CUSTOMER'
+                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                }`}
+              >
+                🎲 Jugador
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedRole('SELLER')}
+                className={`flex-1 py-3 rounded-xl font-bold transition-all ${
+                  selectedRole === 'SELLER'
+                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                }`}
+              >
+                🏪 Vendedor
+              </button>
+            </div>
+            <p className="text-gray-500 text-[10px] ml-1">
+              {selectedRole === 'SELLER' 
+                ? '💼 Los vendedores registran apuestas en efectivo desde su terminal'
+                : '🎯 Los jugadores apuestan en línea desde su billetera digital'}
+            </p>
+          </div>
+
           <div className="space-y-2 md:col-span-2">
             <label className="text-xs font-black uppercase text-gray-400 ml-1">Nombre completo</label>
             <input
@@ -172,22 +213,39 @@ export default function RegisterPage() {
             />
           </div>
 
-          <div className="space-y-2 md:col-span-2">
-            <label className="text-xs font-black uppercase text-gray-400 ml-1">Afiliarse a una Banca / Franquicia</label>
-            <select
-              name="franchise_id"
-              value={formData.franchise_id}
-              onChange={handleChange}
-              className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-emerald-500 transition-all appearance-none"
-            >
-              <option value="" className="bg-[#0f172a]">Administrador Maestro (Directo)</option>
-              {franchises.map((f) => (
-                <option key={f.id} value={f.id} className="bg-[#0f172a]">
-                  {f.full_name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* 🔥 Solo mostrar opción de franquicia si NO es vendedor */}
+          {selectedRole !== 'SELLER' && (
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-xs font-black uppercase text-gray-400 ml-1">Afiliarse a una Banca / Franquicia</label>
+              <select
+                name="franchise_id"
+                value={formData.franchise_id}
+                onChange={handleChange}
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-emerald-500 transition-all appearance-none"
+              >
+                <option value="" className="bg-[#0f172a]">Administrador Maestro (Directo)</option>
+                {franchises.map((f) => (
+                  <option key={f.id} value={f.id} className="bg-[#0f172a]">
+                    {f.full_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* 🔥 Para vendedores, mostrar campo de código de invitación (opcional) */}
+          {selectedRole === 'SELLER' && (
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-xs font-black uppercase text-gray-400 ml-1">Código de invitación (opcional)</label>
+              <input
+                type="text"
+                name="invite_code"
+                placeholder="Ingrese código si tiene"
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-emerald-500 transition-all"
+              />
+              <p className="text-gray-500 text-[9px] ml-1">Si tiene un código de invitación de un administrador, ingréselo aquí</p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <label className="text-xs font-black uppercase text-gray-400 ml-1">Contraseña</label>
@@ -249,7 +307,7 @@ export default function RegisterPage() {
                     <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                     CREANDO CUENTA...
                 </span>
-            ) : 'REGISTRARSE AHORA'}
+            ) : selectedRole === 'SELLER' ? 'REGISTRARSE COMO VENDEDOR' : 'REGISTRARSE AHORA'}
           </button>
         </form>
 
