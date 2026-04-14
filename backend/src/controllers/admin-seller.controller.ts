@@ -126,24 +126,25 @@ export const getSellerSalesDetail = async (req: AuthRequest, res: Response) => {
         let params: any[] = [sellerId];
         
         if (start_date && end_date) {
-            dateFilter = `AND DATE(created_at) BETWEEN $2 AND $3`;
+            dateFilter = `AND DATE(b.created_at) BETWEEN $2 AND $3`;
             params.push(start_date, end_date);
         } else if (period === 'today') {
-            dateFilter = `AND DATE(created_at) = CURRENT_DATE`;
+            dateFilter = `AND DATE(b.created_at) = CURRENT_DATE`;
         } else if (period === 'week') {
-            dateFilter = `AND created_at > NOW() - INTERVAL '7 days'`;
+            dateFilter = `AND b.created_at > NOW() - INTERVAL '7 days'`;
         } else if (period === 'month') {
-            dateFilter = `AND created_at > NOW() - INTERVAL '30 days'`;
+            dateFilter = `AND b.created_at > NOW() - INTERVAL '30 days'`;
         }
         
-        // 🔥 CORREGIDO: d.lottery_type en lugar de d.loteria_type
+        // 🔥 CORREGIDO: d.lottery_type y b.created_at (especificando tabla)
         const bets = await pool.query(`
             SELECT 
                 b.*,
                 u.full_name as player_name,
                 d.draw_date,
                 d.draw_time,
-                d.lottery_type as draw_loteria
+                d.lottery_type as draw_loteria,
+                b.created_at as bet_created_at
             FROM bets b
             JOIN users u ON b.user_id = u.id
             JOIN draws d ON b.draw_id = d.id
@@ -154,10 +155,10 @@ export const getSellerSalesDetail = async (req: AuthRequest, res: Response) => {
         const totals = await pool.query(`
             SELECT 
                 COUNT(*) as total_bets,
-                COALESCE(SUM(amount), 0) as total_sales,
-                COALESCE(SUM(prize_amount), 0) as total_prizes
-            FROM bets
-            WHERE seller_id = $1 ${dateFilter}
+                COALESCE(SUM(b.amount), 0) as total_sales,
+                COALESCE(SUM(b.prize_amount), 0) as total_prizes
+            FROM bets b
+            WHERE b.seller_id = $1 ${dateFilter.replace(/b\./g, '')}
         `, params);
         
         res.json({
@@ -175,7 +176,6 @@ export const liquidateSeller = async (req: AuthRequest, res: Response) => {
     const { seller_id, start_date, end_date, commission_percentage } = req.body;
     const adminId = req.user?.id;
     
-    // Validaciones
     if (!seller_id || !start_date || !end_date) {
         return res.status(400).json({ error: 'Faltan datos requeridos' });
     }
@@ -185,22 +185,20 @@ export const liquidateSeller = async (req: AuthRequest, res: Response) => {
     }
     
     try {
-        // Obtener ventas del período
         const salesResult = await pool.query(`
             SELECT 
-                COALESCE(SUM(amount), 0) as total_sales,
-                COALESCE(SUM(prize_amount), 0) as total_prizes
-            FROM bets
-            WHERE seller_id = $1 
-            AND DATE(created_at) BETWEEN $2 AND $3
-            AND status = 'active'
+                COALESCE(SUM(b.amount), 0) as total_sales,
+                COALESCE(SUM(b.prize_amount), 0) as total_prizes
+            FROM bets b
+            WHERE b.seller_id = $1 
+            AND DATE(b.created_at) BETWEEN $2 AND $3
+            AND b.status = 'active'
         `, [seller_id, start_date, end_date]);
         
         const totalSales = parseFloat(salesResult.rows[0].total_sales);
         const totalPrizes = parseFloat(salesResult.rows[0].total_prizes);
         const commissionAmount = totalSales * (commission_percentage / 100);
         
-        // Verificar si las ventas cubren los premios
         if (totalPrizes > totalSales) {
             const shortfall = totalPrizes - totalSales;
             return res.status(400).json({ 
@@ -215,7 +213,6 @@ export const liquidateSeller = async (req: AuthRequest, res: Response) => {
         
         const netToSeller = totalSales - totalPrizes - commissionAmount;
         
-        // Guardar liquidación
         const liquidation = await pool.query(`
             INSERT INTO seller_liquidations (
                 seller_id, admin_id, start_date, end_date, 
@@ -248,7 +245,6 @@ export const payPrize = async (req: AuthRequest, res: Response) => {
     const { betId } = req.params;
     
     try {
-        // Verificar la apuesta
         const betCheck = await pool.query(`
             SELECT id, status, prize_amount, prize_paid
             FROM bets
@@ -269,7 +265,6 @@ export const payPrize = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ error: 'Este premio ya fue pagado' });
         }
         
-        // Marcar como pagado
         const result = await pool.query(`
             UPDATE bets 
             SET prize_paid = true, prize_paid_at = NOW()
