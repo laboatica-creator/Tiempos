@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { api } from '../../../lib/api';
-import { formatDrawDate, getCurrentCostaRicaTime } from '../../../lib/dateUtils';
+import { api } from '@/lib/api';
+import { formatDrawDate, getCurrentCostaRicaTime } from '@/lib/dateUtils';
 import Logo from '@/components/Logo';
 
 interface Draw {

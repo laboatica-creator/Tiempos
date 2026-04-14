@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { api } from '../../../lib/api';
+import { api } from '@/lib/api';
 import Logo from '@/components/Logo';
 
 export default function AdminSellers() {
