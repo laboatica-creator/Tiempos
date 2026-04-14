@@ -185,7 +185,7 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
         );
         
         const winningBets = await client.query(
-            `SELECT bi.*, b.user_id 
+            `SELECT bi.*, b.user_id, b.payment_method 
              FROM bet_items bi
              JOIN bets b ON bi.bet_id = b.id
              WHERE b.draw_id = $1 AND bi.number = $2 AND b.status = 'ACTIVE'`,
@@ -195,24 +195,33 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
         for (const item of winningBets.rows) {
             const prize = Number(item.amount) * PAYOUT_MULTIPLIER;
             
-            await client.query(
-                `UPDATE wallets SET balance = balance + $1, total_winnings = total_winnings + $1, updated_at = NOW() 
-                 WHERE user_id = $2`,
-                [prize, item.user_id]
-            );
+            // Solo acreditar billetera si es pago con billetera
+            if (item.payment_method !== 'cash') {
+                await client.query(
+                    `UPDATE wallets SET balance = balance + $1, total_winnings = total_winnings + $1, updated_at = NOW() 
+                     WHERE user_id = $2`,
+                    [prize, item.user_id]
+                );
+                
+                await client.query(
+                    `INSERT INTO wallet_transactions (wallet_id, type, amount, description, reference_id) 
+                     SELECT id, 'WIN', $1, $2, $3 FROM wallets WHERE user_id = $4`,
+                    [prize, `PREMIO: ${draw.lottery_type} ${draw.draw_time} (#${winning_number})`, drawId, item.user_id]
+                );
+            }
             
             await client.query(
                 `INSERT INTO winnings (bet_item_id, user_id, draw_id, amount) VALUES ($1, $2, $3, $4)`,
                 [item.id, item.user_id, drawId, prize]
             );
             
-            await client.query(
-                `INSERT INTO wallet_transactions (wallet_id, type, amount, description, reference_id) 
-                 SELECT id, 'WIN', $1, $2, $3 FROM wallets WHERE user_id = $4`,
-                [prize, `PREMIO: ${draw.lottery_type} ${draw.draw_time} (#${winning_number})`, drawId, item.user_id]
-            );
-            
             await client.query(`UPDATE bet_items SET status = 'WON', prize = $1 WHERE id = $2`, [prize, item.id]);
+            
+            // Actualizar el premio total en la apuesta
+            await client.query(
+                `UPDATE bets SET prize_amount = prize_amount + $1 WHERE id = $2`,
+                [prize, item.bet_id]
+            );
         }
         
         if (!isCorrection) {

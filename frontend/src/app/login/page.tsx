@@ -47,6 +47,8 @@ export default function LoginPage() {
         
         if (data.user.role === 'ADMIN' || data.user.role === 'FRANCHISE') {
           router.push('/admin');
+        } else if (data.user.role === 'SELLER') {
+          router.push('/seller/dashboard');
         } else {
           router.push('/betting');
         }

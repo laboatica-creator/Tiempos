@@ -42,19 +42,21 @@ export const registerUser = async (req: Request, res: Response) => {
 
         // Insert user
         const result = await pool.query(
-            `INSERT INTO users (full_name, national_id, phone_number, email, date_of_birth, password_hash, role, franchise_id, agent_id) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, role, email, full_name`,
-            [full_name, national_id, phone_number, email, date_of_birth, password_hash, role, franchise_id, agent_id]
+            `INSERT INTO users (full_name, national_id, phone_number, email, date_of_birth, password_hash, role, franchise_id, agent_id, commission_percentage) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, role, email, full_name`,
+            [full_name, national_id, phone_number, email, date_of_birth, password_hash, role, franchise_id, agent_id, role === 'SELLER' ? 10.00 : 0.00]
         );
 
         const newUser = result.rows[0];
         console.log(`Usuario creado ID: ${newUser.id}`);
 
-        // Create wallet for user
-        await pool.query(
-            `INSERT INTO wallets (user_id, balance) VALUES ($1, $2)`,
-            [newUser.id, 0.00]
-        );
+        // Create wallet only for CUSTOMER/AGENT/FRANCHISE (Sellers handle cash)
+        if (newUser.role !== 'SELLER') {
+            await pool.query(
+                `INSERT INTO wallets (user_id, balance) VALUES ($1, $2)`,
+                [newUser.id, 0.00]
+            );
+        }
 
         // Send welcome email
         try {

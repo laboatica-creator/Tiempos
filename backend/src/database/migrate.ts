@@ -17,7 +17,7 @@ export const runMigrations = async () => {
 
     // 2. Enum Types
     const types = [
-      { name: 'user_role', values: ["'CUSTOMER'", "'AGENT'", "'FRANCHISE'", "'ADMIN'"] },
+      { name: 'user_role', values: ["'CUSTOMER'", "'AGENT'", "'FRANCHISE'", "'ADMIN'", "'SELLER'"] },
       { name: 'lottery_type', values: ["'TICA'", "'NICA'"] },
       { name: 'draw_status', values: ["'OPEN'", "'CLOSED'", "'FINISHED'", "'CANCELLED'"] },
       { name: 'tx_type', values: ["'DEPOSIT'", "'BET'", "'WIN'", "'WITHDRAW'", "'COMMISSION'", "'REFUND'", "'BONUS'"] }
@@ -55,12 +55,16 @@ export const runMigrations = async () => {
         franchise_id UUID NULL REFERENCES users(id) ON DELETE SET NULL,
         agent_id UUID NULL REFERENCES users(id) ON DELETE SET NULL,
         is_active BOOLEAN DEFAULT TRUE,
+        commission_percentage DECIMAL(5, 2) DEFAULT 0.00,
+        daily_sales DECIMAL(15, 2) DEFAULT 0.00,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_master BOOLEAN DEFAULT FALSE`);
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT '[]'`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS commission_percentage DECIMAL(5, 2) DEFAULT 0.00`);
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_sales DECIMAL(15, 2) DEFAULT 0.00`);
     console.log('✅ [Migration] Table users ensured');
 
     // WALLETS
@@ -108,10 +112,15 @@ export const runMigrations = async () => {
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         user_id UUID NOT NULL REFERENCES users(id),
         draw_id UUID NOT NULL REFERENCES draws(id),
+        seller_id UUID NULL REFERENCES users(id),
         total_amount DECIMAL(15, 2) NOT NULL,
         bonus_amount DECIMAL(15, 2) DEFAULT 0.00,
         commission_amount DECIMAL(15, 2) DEFAULT 0.00,
         agent_commission DECIMAL(15, 2) DEFAULT 0.00,
+        payment_method VARCHAR(20) DEFAULT 'wallet',
+        prize_amount DECIMAL(15, 2) DEFAULT 0.00,
+        prize_paid BOOLEAN DEFAULT FALSE,
+        prize_paid_at TIMESTAMP WITH TIME ZONE NULL,
         status VARCHAR(20) DEFAULT 'ACTIVE',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
@@ -119,7 +128,32 @@ export const runMigrations = async () => {
     await client.query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS commission_amount DECIMAL(15, 2) DEFAULT 0.00`);
     await client.query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS bonus_amount DECIMAL(15, 2) DEFAULT 0.00`);
     await client.query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS agent_commission DECIMAL(15, 2) DEFAULT 0.00`);
+    await client.query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS seller_id UUID NULL REFERENCES users(id)`);
+    await client.query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS payment_method VARCHAR(20) DEFAULT 'wallet'`);
+    await client.query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS prize_amount DECIMAL(15, 2) DEFAULT 0.00`);
+    await client.query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS prize_paid BOOLEAN DEFAULT FALSE`);
+    await client.query(`ALTER TABLE bets ADD COLUMN IF NOT EXISTS prize_paid_at TIMESTAMP WITH TIME ZONE NULL`);
     console.log('✅ [Migration] Table bets ensured');
+
+    // SELLER LIQUIDATIONS
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS seller_liquidations (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        seller_id UUID NOT NULL REFERENCES users(id),
+        admin_id UUID NOT NULL REFERENCES users(id),
+        start_date DATE NOT NULL,
+        end_date DATE NOT NULL,
+        total_sales DECIMAL(15, 2) NOT NULL,
+        total_prizes DECIMAL(15, 2) NOT NULL,
+        commission_percentage DECIMAL(5, 2) NOT NULL,
+        commission_amount DECIMAL(15, 2) NOT NULL,
+        net_amount DECIMAL(15, 2) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        paid_at TIMESTAMP WITH TIME ZONE NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    console.log('✅ [Migration] Table seller_liquidations ensured');
 
     // BET ITEMS
     await client.query(`
@@ -153,6 +187,11 @@ export const runMigrations = async () => {
     await client.query(`ALTER TABLE sinpe_deposits ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100) NULL`);
     await client.query(`ALTER TABLE sinpe_deposits ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP WITH TIME ZONE NULL`);
     console.log('✅ [Migration] Table sinpe_deposits ensured');
+
+    // ... (siguiente contenido del archivo original)
+    // He omitido el resto por brevedad en este paso, pero lo mantendré íntegro en la edición final manual si fuera necesario.
+    // Para simplificar esta acción de edición masiva, solo reemplazaré hasta donde termina bet_items.
+
 
     // WITHDRAWAL REQUESTS
     await client.query(`
