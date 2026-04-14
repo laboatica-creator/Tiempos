@@ -1,5 +1,25 @@
 {
   "dependencies": {
+    "pg": "^8.20.0",
     "tesseract.js": "^7.0.0"
-  }
+  },
+  "name": "tiempos",
+  "version": "1.0.0",
+  "description": "Production-ready scalable betting platform for Costa Rica & Nicaragua Tiempos (2-digit lotteries).",
+  "main": "check.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/laboatica-creator/tiempos.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/laboatica-creator/tiempos/issues"
+  },
+  "homepage": "https://github.com/laboatica-creator/tiempos#readme"
 }

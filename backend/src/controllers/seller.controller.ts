@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { pool } from '../index';
 import { AuthRequest } from '../middlewares/auth.middleware';
+import jwt from 'jsonwebtoken';
 
 // Obtener sorteos activos para apostar
 export const getActiveDraws = async (req: AuthRequest, res: Response) => {
@@ -21,14 +22,25 @@ export const getActiveDraws = async (req: AuthRequest, res: Response) => {
 
 // Registrar apuesta en efectivo (vendedor)
 export const createCashBet = async (req: AuthRequest, res: Response) => {
-    const sellerId = req.user?.id;
+    // 🔥 Obtener seller_id del token manualmente
+    const authHeader = req.headers.authorization;
+    let sellerId = null;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1];
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecretjwtkey_tiempos_prod_2026') as any;
+            sellerId = decoded.id;
+            console.log('sellerId desde token:', sellerId);
+        } catch (err) {
+            console.error('Error decodificando token:', err);
+        }
+    }
+    
     const { player_name, player_phone, number, amount, draw_id, loteria_type } = req.body;
     
-    console.log('createCashBet - sellerId:', sellerId);
-    console.log('createCashBet - body:', req.body);
-    
     if (!sellerId) {
-        return res.status(401).json({ error: 'Vendedor no autenticado' });
+        return res.status(401).json({ error: 'Vendedor no autenticado - token inválido' });
     }
     
     if (!player_name || !player_phone || !number || !amount || !draw_id) {
