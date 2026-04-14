@@ -136,13 +136,14 @@ export const getSellerSalesDetail = async (req: AuthRequest, res: Response) => {
             dateFilter = `AND created_at > NOW() - INTERVAL '30 days'`;
         }
         
+        // 🔥 CORREGIDO: d.lottery_type en lugar de d.loteria_type
         const bets = await pool.query(`
             SELECT 
                 b.*,
                 u.full_name as player_name,
                 d.draw_date,
                 d.draw_time,
-                d.loteria_type as draw_loteria
+                d.lottery_type as draw_loteria
             FROM bets b
             JOIN users u ON b.user_id = u.id
             JOIN draws d ON b.draw_id = d.id
