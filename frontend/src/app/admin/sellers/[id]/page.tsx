@@ -77,12 +77,19 @@ export default function SellerDetailPage() {
         url += `?period=${period}`;
       }
       const data = await api.get(url, token);
+      
+      // 🔥 ALERTA DE DEPURACIÓN - Muestra los datos recibidos
+      alert('Datos recibidos:\n' + JSON.stringify(data, null, 2).substring(0, 1000));
+      
       if (data.bets) {
         setBets(data.bets);
         setTotals(data.totals);
+      } else {
+        alert('No hay propiedad "bets" en la respuesta. Respuesta: ' + JSON.stringify(data));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching sales:', err);
+      alert('Error: ' + err.message);
     } finally {
       setLoading(false);
     }
