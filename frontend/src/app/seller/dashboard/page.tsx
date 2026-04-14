@@ -116,6 +116,16 @@ export default function SellerDashboard() {
 
     try {
       const token = sessionStorage.getItem('token');
+      console.log('🔍 Token enviado:', token ? 'OK' : 'NO HAY TOKEN');
+      console.log('🔍 Datos enviados:', {
+        player_name: 'Jugador en efectivo',
+        player_phone: '00000000',
+        number: selectedNumber,
+        amount: amount,
+        draw_id: selectedDraw.id,
+        loteria_type: loteriaType
+      });
+
       const data = await api.post('/seller/cash-bet', {
         player_name: 'Jugador en efectivo',
         player_phone: '00000000',
@@ -125,8 +135,11 @@ export default function SellerDashboard() {
         loteria_type: loteriaType
       }, token);
 
+      console.log('🔍 Respuesta del servidor:', data);
+
       if (data.error) {
         setError(data.error);
+        console.error('❌ Error del servidor:', data.error);
       } else {
         setSuccess(`✅ Apuesta registrada: ${selectedNumber} por ₡${amount.toLocaleString()}`);
         setShowTicket(data.bet);
@@ -140,6 +153,7 @@ export default function SellerDashboard() {
         setTimeout(() => setShowTicket(null), 5000);
       }
     } catch (err) {
+      console.error('❌ Excepción en handlePlaceBet:', err);
       setError('Error al registrar la apuesta');
     } finally {
       setLoading(false);
