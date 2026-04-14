@@ -1,5 +1,6 @@
 import announcementRoutes from './routes/announcement.route';
 import promotionRoutes from './routes/promotion.route';
+import sellerRoutes from './routes/seller.route';
 import { runMigrations } from './database/migrate';
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
@@ -88,6 +89,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/admin/reports', adminReportsRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/admin/promotions', promotionRoutes);
+app.use('/api/seller', sellerRoutes);
 
 // 🔥 LOG DE VERIFICACIÓN DE RUTAS
 console.log('✅ [RUTAS REGISTRADAS]');
@@ -102,6 +104,7 @@ console.log('   - /api/admin/reports');
 console.log('   - /api/payment-methods');
 console.log('   - /api/announcements');
 console.log('   - /api/admin/promotions');
+console.log('   - /api/seller');
 console.log('   - /api/webhook');
 console.log('🔧 [8] Rutas cargadas');
 
@@ -181,4 +184,4 @@ const startServer = async () => {
 
 console.log('🔧 [20] Llamando a startServer()...');
 startServer();
-console.log('🔧 [21] startServer() llamado (continuará asincrónicamente)');" " 
+console.log('🔧 [21] startServer() llamado (continuará asincrónicamente)');
