@@ -6,12 +6,30 @@ import bcrypt from 'bcrypt';
 
 const PAYOUT_MULTIPLIER = 90;
 
-// 🔥 Función para determinar si un sorteo está abierto para apuestas (20 minutos antes)
+// 🔥 Función corregida para determinar si un sorteo está abierto para apuestas (20 minutos antes)
 const isDrawOpenForBets = (drawTime: string, drawDate: string): boolean => {
-    const now = new Date();
-    const drawDateTime = new Date(`${drawDate}T${drawTime}:00`);
-    const closeTime = new Date(drawDateTime.getTime() - 20 * 60 * 1000);
-    return now <= closeTime;
+    try {
+        // Combinar fecha y hora en formato ISO
+        const drawDateTime = new Date(`${drawDate}T${drawTime}:00`);
+        if (isNaN(drawDateTime.getTime())) {
+            console.error(`[BET] Fecha inválida: ${drawDate}T${drawTime}:00`);
+            return false;
+        }
+        
+        const now = new Date();
+        const closeTime = new Date(drawDateTime.getTime() - 20 * 60 * 1000);
+        const isOpen = now <= closeTime;
+        
+        console.log(`[BET] Sorteo: ${drawTime}`);
+        console.log(`[BET] Hora actual: ${now.toLocaleTimeString()}`);
+        console.log(`[BET] Cierre de apuestas: ${closeTime.toLocaleTimeString()}`);
+        console.log(`[BET] ¿Abierto?: ${isOpen}`);
+        
+        return isOpen;
+    } catch (error) {
+        console.error('[BET] Error en isDrawOpenForBets:', error);
+        return false;
+    }
 };
 
 export const createDraw = async (req: AuthRequest, res: Response) => {
@@ -71,12 +89,12 @@ export const getDraws = async (req: Request, res: Response) => {
         
         let draws = result.rows;
         
-        // 🔥 Si se solicitan sorteos activos, filtrar por horario de cierre (20 minutos antes)
+        // 🔥 Si se solicitan sorteos activos, calcular can_bet correctamente
         if (status === 'ACTIVE') {
-            draws = draws.filter(draw => {
+            draws = draws.map(draw => {
                 const isOpen = isDrawOpenForBets(draw.draw_time, draw.draw_date);
                 draw.can_bet = isOpen;
-                return true;
+                return draw;
             });
             console.log(`[DRAWS] Sorteos activos después de filtrar por horario: ${draws.length}`);
         }
