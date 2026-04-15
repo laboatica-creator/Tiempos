@@ -9,7 +9,16 @@ export const getAllSellers = async (req: AuthRequest, res: Response) => {
             SELECT 
                 u.id, u.full_name, u.email, u.phone_number, u.is_active, u.created_at,
                 u.commission_percentage,
-                COALESCE((SELECT SUM(total_amount) FROM bets WHERE seller_id = u.id AND created_at::date = CURRENT_DATE), 0) as sales_today
+                COALESCE((
+                    SELECT SUM(total_amount) FROM bets 
+                    WHERE seller_id = u.id 
+                    AND created_at >= date_trunc('month', NOW())
+                ), 0) as sales_today,
+                COALESCE((
+                    SELECT COUNT(*) FROM bets 
+                    WHERE seller_id = u.id 
+                    AND created_at >= date_trunc('month', NOW())
+                ), 0) as bets_this_month
             FROM users u
             WHERE u.role = 'SELLER'
             ORDER BY u.created_at DESC

@@ -61,13 +61,7 @@ export default function AdminSellers() {
                 </div>
             </header>
 
-            {/* 🔥 DEBUG: Mostrar datos crudos */}
-            <div className="bg-yellow-500/10 p-4 rounded-xl mb-4 border border-yellow-500/30">
-                <p className="text-yellow-400 text-xs font-bold">DEBUG - Datos recibidos:</p>
-                <pre className="text-[9px] text-white overflow-auto max-h-40 whitespace-pre-wrap">
-                    {JSON.stringify(sellers, null, 2)}
-                </pre>
-            </div>
+
 
             {/* CARDS DE RESUMEN GLOBAL */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
@@ -77,7 +71,7 @@ export default function AdminSellers() {
                     <p className="text-[10px] text-emerald-400 font-bold mt-2">● {sellers.filter(s => s.is_active).length} Activos</p>
                 </div>
                 <div className="bg-[#1e293b] p-6 rounded-2xl border border-blue-500/20">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ventas Totales Hoy</p>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ventas del Mes</p>
                     <p className="text-4xl font-black text-blue-400">
                         ₡{sellers.reduce((sum, s) => sum + (Number(s.sales_today) || 0), 0).toLocaleString()}
                     </p>
@@ -95,7 +89,7 @@ export default function AdminSellers() {
                         <tr className="bg-[#0f172a] border-b border-white/10">
                             <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400">Vendedor</th>
                             <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400">Contacto</th>
-                            <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400 text-center">Ventas Hoy</th>
+                            <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400 text-center">Ventas (Mes)</th>
                             <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400 text-center">Estado</th>
                             <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400 text-right">Acciones</th>
                         </tr>
