@@ -61,6 +61,14 @@ export default function AdminSellers() {
                 </div>
             </header>
 
+            {/* 🔥 DEBUG: Mostrar datos crudos */}
+            <div className="bg-yellow-500/10 p-4 rounded-xl mb-4 border border-yellow-500/30">
+                <p className="text-yellow-400 text-xs font-bold">DEBUG - Datos recibidos:</p>
+                <pre className="text-[9px] text-white overflow-auto max-h-40 whitespace-pre-wrap">
+                    {JSON.stringify(sellers, null, 2)}
+                </pre>
+            </div>
+
             {/* CARDS DE RESUMEN GLOBAL */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
                 <div className="bg-[#1e293b] p-6 rounded-2xl border border-emerald-500/20">
