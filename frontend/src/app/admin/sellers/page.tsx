@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import Logo from '@/components/Logo';
 
 export default function AdminSellers() {
     const [sellers, setSellers] = useState<any[]>([]);
@@ -19,31 +18,14 @@ export default function AdminSellers() {
         try {
             setLoading(true);
             const token = sessionStorage.getItem('token');
-            console.log('🔍 [ADMIN SELLERS] Token:', token ? 'OK (' + token.substring(0, 20) + '...)' : 'NO HAY TOKEN');
             
-            console.log('🔍 [ADMIN SELLERS] Llamando a /admin/sellers...');
             const sellersRes = await api.get('/admin/sellers', token);
-            console.log('🔍 [ADMIN SELLERS] sellersRes:', sellersRes);
-            
-            console.log('🔍 [ADMIN SELLERS] Llamando a /admin/sellers/stats...');
             const statsRes = await api.get('/admin/sellers/stats', token);
-            console.log('🔍 [ADMIN SELLERS] statsRes:', statsRes);
             
-            if (Array.isArray(sellersRes)) {
-                console.log('✅ Vendedores cargados:', sellersRes.length);
-                setSellers(sellersRes);
-            } else {
-                console.error('❌ sellersRes no es array:', sellersRes);
-            }
-            
-            if (Array.isArray(statsRes)) {
-                console.log('✅ Stats cargados:', statsRes.length);
-                setStats(statsRes);
-            } else {
-                console.error('❌ statsRes no es array:', statsRes);
-            }
+            if (Array.isArray(sellersRes)) setSellers(sellersRes);
+            if (Array.isArray(statsRes)) setStats(statsRes);
         } catch (err) {
-            console.error('❌ Error fetching admin sellers:', err);
+            console.error('Error fetching admin sellers:', err);
         } finally {
             setLoading(false);
         }
@@ -59,14 +41,16 @@ export default function AdminSellers() {
         }
     };
 
-    if (loading) return (
-        <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
-            <div className="animate-spin h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full"></div>
-        </div>
-    );
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+                <div className="animate-spin h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full"></div>
+            </div>
+        );
+    }
 
     return (
-        <div className="min-h-screen bg-[#010816] text-white p-6">
+        <div className="min-h-screen bg-[#0f172a] text-white p-6">
             <header className="flex justify-between items-center mb-8">
                 <div className="flex items-center gap-4">
                     <button onClick={() => router.push('/admin')} className="p-2 hover:bg-white/5 rounded-full transition-colors">←</button>
@@ -79,26 +63,28 @@ export default function AdminSellers() {
 
             {/* CARDS DE RESUMEN GLOBAL */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-                <div className="glass-panel p-6 border-emerald-500/20">
+                <div className="bg-[#1e293b] p-6 rounded-2xl border border-emerald-500/20">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Vendedores</p>
                     <p className="text-4xl font-black text-white">{sellers.length}</p>
                     <p className="text-[10px] text-emerald-400 font-bold mt-2">● {sellers.filter(s => s.is_active).length} Activos</p>
                 </div>
-                <div className="glass-panel p-6 border-blue-500/20">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ventas Hoy (Admin)</p>
-                    <p className="text-4xl font-black text-blue-400">₡{sellers.reduce((s, u) => s + Number(u.sales_today), 0).toLocaleString()}</p>
+                <div className="bg-[#1e293b] p-6 rounded-2xl border border-blue-500/20">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ventas Totales Hoy</p>
+                    <p className="text-4xl font-black text-blue-400">
+                        ₡{sellers.reduce((sum, s) => sum + (Number(s.sales_today) || 0), 0).toLocaleString()}
+                    </p>
                 </div>
-                <div className="glass-panel p-6 border-rose-500/20">
+                <div className="bg-[#1e293b] p-6 rounded-2xl border border-rose-500/20">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Pendientes Liquidar</p>
                     <p className="text-4xl font-black text-rose-500">{sellers.length}</p>
                 </div>
             </div>
 
             {/* TABLA DE VENDEDORES */}
-            <div className="glass-panel overflow-hidden border-white/5">
+            <div className="bg-[#1e293b] rounded-2xl overflow-hidden border border-white/5">
                 <table className="w-full text-left">
                     <thead>
-                        <tr className="bg-white/5 border-b border-white/10">
+                        <tr className="bg-[#0f172a] border-b border-white/10">
                             <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400">Vendedor</th>
                             <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400">Contacto</th>
                             <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-400 text-center">Ventas Hoy</th>
@@ -107,52 +93,74 @@ export default function AdminSellers() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                        {sellers.map((seller) => {
-                            const sellerStat = stats.find(s => s.seller_id === seller.id);
-                            return (
-                                <tr 
-                                    key={seller.id} 
-                                    className="hover:bg-white/[0.02] transition-colors cursor-pointer group"
-                                    onClick={() => router.push(`/admin/sellers/${seller.id}`)}
-                                >
-                                    <td className="px-6 py-4">
-                                        <div className="font-black text-white group-hover:text-emerald-400 transition-colors">{seller.full_name}</div>
-                                        <div className="text-[10px] text-gray-500 uppercase">{new Date(seller.created_at).toLocaleDateString()}</div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="text-xs text-gray-300">{seller.email}</div>
-                                        <div className="text-[10px] text-emerald-500 font-bold">{seller.phone_number}</div>
-                                    </td>
-                                    <td className="px-6 py-4 text-center">
-                                        <div className="font-black text-white">₡{Number(seller.sales_today).toLocaleString()}</div>
-                                        <div className="text-[9px] text-gray-500 uppercase">Mes: ₡{Number(sellerStat?.total_sales_month || 0).toLocaleString()}</div>
-                                    </td>
-                                    <td className="px-6 py-4 text-center">
-                                        <span className={`px-3 py-1 rounded-full text-[9px] font-black tracking-widest ${seller.is_active ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
-                                            {seller.is_active ? 'ACTIVO' : 'INACTIVO'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                                        <div className="flex justify-end gap-2">
-                                            <button 
-                                                onClick={() => toggleStatus(seller.id, seller.is_active)}
-                                                className={`p-2 rounded-lg transition-all ${seller.is_active ? 'text-rose-400 hover:bg-rose-500/10' : 'text-emerald-400 hover:bg-emerald-500/10'}`}
-                                                title={seller.is_active ? 'Desactivar' : 'Activar'}
-                                            >
-                                                {seller.is_active ? '👤 🚫' : '👤 ✅'}
-                                            </button>
-                                            <button 
-                                                onClick={() => router.push(`/admin/sellers/${seller.id}`)}
-                                                className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"
-                                                title="Detalle y Liquidación"
-                                            >
-                                                📊
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            );
-                        })}
+                        {sellers.length === 0 ? (
+                            <tr>
+                                <td colSpan={5} className="px-6 py-20 text-center text-gray-500">
+                                    No hay vendedores registrados
+                                </td>
+                            </tr>
+                        ) : (
+                            sellers.map((seller) => {
+                                const sellerStat = stats.find(s => s.seller_id === seller.id);
+                                return (
+                                    <tr 
+                                        key={seller.id} 
+                                        className="hover:bg-white/5 transition-colors cursor-pointer group"
+                                        onClick={() => router.push(`/admin/sellers/${seller.id}`)}
+                                    >
+                                        <td className="px-6 py-4">
+                                            <div className="font-black text-white group-hover:text-emerald-400 transition-colors">
+                                                {seller.full_name || seller.name || 'Sin nombre'}
+                                            </div>
+                                            <div className="text-[10px] text-gray-500 uppercase">
+                                                {seller.created_at ? new Date(seller.created_at).toLocaleDateString() : 'Fecha desconocida'}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="text-xs text-gray-300">{seller.email || 'Sin email'}</div>
+                                            <div className="text-[10px] text-emerald-500 font-bold">
+                                                {seller.phone_number || seller.phone || 'Sin teléfono'}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <div className="font-black text-white">
+                                                ₡{Number(seller.sales_today || seller.daily_sales || 0).toLocaleString()}
+                                            </div>
+                                            <div className="text-[9px] text-gray-500 uppercase">
+                                                Mes: ₡{Number(sellerStat?.total_sales_month || 0).toLocaleString()}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <span className={`px-3 py-1 rounded-full text-[9px] font-black tracking-widest ${
+                                                seller.is_active ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                                            }`}>
+                                                {seller.is_active ? 'ACTIVO' : 'INACTIVO'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex justify-end gap-2">
+                                                <button 
+                                                    onClick={() => toggleStatus(seller.id, seller.is_active)}
+                                                    className={`p-2 rounded-lg transition-all ${
+                                                        seller.is_active ? 'text-rose-400 hover:bg-rose-500/10' : 'text-emerald-400 hover:bg-emerald-500/10'
+                                                    }`}
+                                                    title={seller.is_active ? 'Desactivar' : 'Activar'}
+                                                >
+                                                    {seller.is_active ? '🚫' : '✅'}
+                                                </button>
+                                                <button 
+                                                    onClick={() => router.push(`/admin/sellers/${seller.id}`)}
+                                                    className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"
+                                                    title="Detalle y Liquidación"
+                                                >
+                                                    📊
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </table>
+                                );
+                            })
+                        )}
                     </tbody>
                 </table>
             </div>
