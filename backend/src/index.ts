@@ -1,15 +1,16 @@
+import dotenv from 'dotenv';
+dotenv.config(); // 🔥 CRÍTICO: debe ser lo primero antes de cualquier otro import
+
 import announcementRoutes from './routes/announcement.route';
 import promotionRoutes from './routes/promotion.route';
 import sellerRoutes from './routes/seller.route';
 import { runMigrations } from './database/migrate';
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { setupCronJobs } from './services/cron.service';
 
-dotenv.config();
 process.env.TZ = 'America/Costa_Rica';
 
 console.log('🔧 [1] Dotenv configurado');
