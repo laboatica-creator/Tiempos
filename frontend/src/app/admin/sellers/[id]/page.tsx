@@ -79,11 +79,11 @@ export default function SellerDetailPage({ params }: { params: { id: string } })
                 if (found) {
                     setSeller(found);
                     setCommissionPct(Number(found.commission_percentage) || 10);
-                    setLoading(false);
                 }
             }
         } catch (err) { 
-            console.error('Error fetching seller:', err);
+            console.error('Error fetching seller:', err); 
+        } finally {
             setLoading(false);
         }
     };
@@ -91,7 +91,7 @@ export default function SellerDetailPage({ params }: { params: { id: string } })
     const fetchSalesDetail = async () => {
         try {
             const token = sessionStorage.getItem('token');
-            const data = await api.get(`/admin/sellers/${sellerId}/sales?start=${startDate}&end=${endDate}`, token);
+            const data = await api.get(`/admin/sellers/${sellerId}/sales?start_date=${startDate}&end_date=${endDate}`, token);
             if (data && !data.error) {
                 setBets(data.bets || []);
                 setTotals(data.totals || { total_bets: 0, total_sales: 0, total_prizes: 0 });
@@ -266,7 +266,7 @@ export default function SellerDetailPage({ params }: { params: { id: string } })
                                             <th className="px-6 py-4 text-[9px] font-black uppercase text-gray-500">Info / Fecha</th>
                                             <th className="px-6 py-4 text-[9px] font-black uppercase text-gray-500 text-center">Monto / Premio</th>
                                             <th className="px-6 py-4 text-[9px] font-black uppercase text-gray-500 text-right">Acción</th>
-                                        </tr>
+                                        <tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/5">
                                         {bets.map((bet) => (
