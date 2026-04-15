@@ -110,7 +110,7 @@ export default function AdminSellers() {
                                     >
                                         <td className="px-6 py-4">
                                             <div className="font-black text-white group-hover:text-emerald-400 transition-colors">
-                                                {seller.full_name || seller.name || 'Sin nombre'}
+                                                {seller.full_name || 'Sin nombre'}
                                             </div>
                                             <div className="text-[10px] text-gray-500 uppercase">
                                                 {seller.created_at ? new Date(seller.created_at).toLocaleDateString() : 'Fecha desconocida'}
@@ -119,12 +119,12 @@ export default function AdminSellers() {
                                         <td className="px-6 py-4">
                                             <div className="text-xs text-gray-300">{seller.email || 'Sin email'}</div>
                                             <div className="text-[10px] text-emerald-500 font-bold">
-                                                {seller.phone_number || seller.phone || 'Sin teléfono'}
+                                                {seller.phone_number || 'Sin teléfono'}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <div className="font-black text-white">
-                                                ₡{Number(seller.sales_today || seller.daily_sales || 0).toLocaleString()}
+                                                ₡{Number(seller.sales_today || 0).toLocaleString()}
                                             </div>
                                             <div className="text-[9px] text-gray-500 uppercase">
                                                 Mes: ₡{Number(sellerStat?.total_sales_month || 0).toLocaleString()}
@@ -157,7 +157,7 @@ export default function AdminSellers() {
                                                 </button>
                                             </div>
                                         </td>
-                                    </table>
+                                    </tr>
                                 );
                             })
                         )}
