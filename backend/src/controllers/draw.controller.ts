@@ -6,26 +6,17 @@ import bcrypt from 'bcrypt';
 
 const PAYOUT_MULTIPLIER = 90;
 
-// 🔥 Función corregida para determinar si un sorteo está abierto para apuestas (20 minutos antes)
+// 🔥 Función para determinar si un sorteo está abierto para apuestas (20 minutos antes)
 const isDrawOpenForBets = (drawTime: string, drawDate: string): boolean => {
     try {
-        // Combinar fecha y hora en formato ISO
-        const drawDateTime = new Date(`${drawDate}T${drawTime}:00`);
-        if (isNaN(drawDateTime.getTime())) {
-            console.error(`[BET] Fecha inválida: ${drawDate}T${drawTime}:00`);
-            return false;
-        }
+        const [year, month, day] = drawDate.split('-');
+        const [hour, minute] = drawTime.split(':');
         
+        const drawDateTime = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), 0);
         const now = new Date();
         const closeTime = new Date(drawDateTime.getTime() - 20 * 60 * 1000);
-        const isOpen = now <= closeTime;
         
-        console.log(`[BET] Sorteo: ${drawTime}`);
-        console.log(`[BET] Hora actual: ${now.toLocaleTimeString()}`);
-        console.log(`[BET] Cierre de apuestas: ${closeTime.toLocaleTimeString()}`);
-        console.log(`[BET] ¿Abierto?: ${isOpen}`);
-        
-        return isOpen;
+        return now <= closeTime;
     } catch (error) {
         console.error('[BET] Error en isDrawOpenForBets:', error);
         return false;
@@ -50,10 +41,9 @@ export const createDraw = async (req: AuthRequest, res: Response) => {
 export const getDraws = async (req: Request, res: Response) => {
     try {
         const { date, status } = req.query;
-        const timeZone = 'America/Costa_Rica';
         
-        const today = new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date());
-        console.log(`[DRAWS] Fecha actual Costa Rica: ${today}`);
+        const today = new Date().toISOString().split('T')[0];
+        console.log(`[DRAWS] Fecha actual: ${today}`);
 
         let query = `
             SELECT 
@@ -89,14 +79,12 @@ export const getDraws = async (req: Request, res: Response) => {
         
         let draws = result.rows;
         
-        // 🔥 Si se solicitan sorteos activos, calcular can_bet correctamente
         if (status === 'ACTIVE') {
             draws = draws.map(draw => {
                 const isOpen = isDrawOpenForBets(draw.draw_time, draw.draw_date);
                 draw.can_bet = isOpen;
                 return draw;
             });
-            console.log(`[DRAWS] Sorteos activos después de filtrar por horario: ${draws.length}`);
         }
         
         res.json(draws);
@@ -213,7 +201,6 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
         for (const item of winningBets.rows) {
             const prize = Number(item.amount) * PAYOUT_MULTIPLIER;
             
-            // Solo acreditar billetera si es pago con billetera
             if (item.payment_method !== 'cash') {
                 await client.query(
                     `UPDATE wallets SET balance = balance + $1, total_winnings = total_winnings + $1, updated_at = NOW() 
@@ -235,7 +222,6 @@ export const setWinningNumber = async (req: AuthRequest, res: Response) => {
             
             await client.query(`UPDATE bet_items SET status = 'WON', prize = $1 WHERE id = $2`, [prize, item.id]);
             
-            // Actualizar el premio total en la apuesta
             await client.query(
                 `UPDATE bets SET prize_amount = prize_amount + $1 WHERE id = $2`,
                 [prize, item.bet_id]
@@ -324,8 +310,6 @@ export const getSuggestedResults = async (req: AuthRequest, res: Response) => {
     try {
         const { drawId } = req.query;
         
-        console.log('[SUGGESTIONS] drawId recibido:', drawId);
-        
         if (!drawId) {
             return res.json({ number: null, message: 'Se requiere drawId' });
         }
@@ -335,19 +319,13 @@ export const getSuggestedResults = async (req: AuthRequest, res: Response) => {
             [drawId]
         );
         
-        console.log('[SUGGESTIONS] Sorteo encontrado:', draw.rows[0]);
-        
         if (draw.rows.length === 0) {
             return res.json({ number: null, message: 'Sorteo no encontrado' });
         }
         
         const { lottery_type, draw_time, draw_date } = draw.rows[0];
         
-        console.log(`[SUGGESTIONS] Buscando para ${lottery_type} a las ${draw_time} del ${draw_date}`);
-        
         const result = await ScraperService.getSuggestedResults(draw_time, draw_date, lottery_type);
-        
-        console.log('[SUGGESTIONS] Resultado del scraper:', result);
         
         res.json(result);
     } catch (error) {
