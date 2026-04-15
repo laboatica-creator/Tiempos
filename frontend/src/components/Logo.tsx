@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-const Logo = ({ className = '', size = 'text-2xl' }: { className?: string, size?: string }) => {
+const Logo = ({ className = '', size = 'text-2xl', showSub = true }: { className?: string, size?: string, showSub?: boolean }) => {
     const ticaUtils = [
         { c: 'text-emerald-400', r: '-rotate-12', y: '-translate-y-1' },
         { c: 'text-yellow-400', r: 'rotate-6', y: 'translate-y-1' },
@@ -17,32 +17,51 @@ const Logo = ({ className = '', size = 'text-2xl' }: { className?: string, size?
         { c: 'text-teal-400', r: '-rotate-12', y: '-translate-y-1' }
     ];
 
-    return (
-        <div className={`flex flex-col sm:flex-row items-center gap-1 sm:gap-3 group cursor-default select-none ${className}`}>
-            <span className={`${size === 'text-2xl' ? 'text-xl' : 'text-3xl'} font-extrabold text-white tracking-tighter uppercase italic opacity-90`}>
-                Tiempos
-            </span>
-            <div className="flex gap-1 items-center">
-                {/* TICA */}
-                <div className="flex">
-                    {['T', 'I', 'C', 'A'].map((l, i) => (
-                        <span key={i} className={`${size} font-black ${ticaUtils[i].c} ${ticaUtils[i].r} ${ticaUtils[i].y} inline-block transition-all duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]`}>
-                            {l}
-                        </span>
-                    ))}
-                </div>
-                
-                <span className="text-xs font-black text-gray-500 mx-1 self-end mb-1 lowercase">y</span>
+    // Determinar tamaño de "PRO" relativo al tamaño principal
+    const proSize = size === 'text-2xl' ? 'text-lg' : 'text-2xl';
 
-                {/* NICA */}
-                <div className="flex">
-                    {['N', 'I', 'C', 'A'].map((l, i) => (
-                        <span key={i} className={`${size} font-black ${nicaUtils[i].c} ${nicaUtils[i].r} ${nicaUtils[i].y} inline-block transition-all duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]`}>
-                            {l}
-                        </span>
-                    ))}
-                </div>
+    return (
+        <div className={`flex flex-col items-center group cursor-default select-none ${className}`}>
+            {/* TIEMPOS PRO */}
+            <div className="flex items-center gap-1">
+                <span className={`${size} font-black text-white tracking-tighter uppercase italic opacity-95 group-hover:drop-shadow-[0_0_12px_rgba(255,255,255,0.2)] transition-all`}>
+                    Tiempos
+                </span>
+                <span 
+                    className={`${proSize} font-black text-[#ef4444] uppercase italic tracking-tighter`}
+                    style={{ 
+                        transform: 'rotate(-8deg) translateY(-4px)',
+                        textShadow: '0 0 10px rgba(239, 68, 68, 0.3)'
+                    }}
+                >
+                    Pro
+                </span>
             </div>
+
+            {/* TICA y NICA (Debajo) */}
+            {showSub && (
+                <div className="flex gap-1 items-center mt-[-4px]">
+                    {/* TICA */}
+                    <div className="flex">
+                        {['T', 'I', 'C', 'A'].map((l, i) => (
+                            <span key={i} className={`text-sm font-black ${ticaUtils[i].c} ${ticaUtils[i].r} ${ticaUtils[i].y} inline-block transition-all duration-300 group-hover:scale-110`}>
+                                {l}
+                            </span>
+                        ))}
+                    </div>
+                    
+                    <span className="text-[10px] font-black text-gray-500 mx-1 uppercase opacity-40">y</span>
+
+                    {/* NICA */}
+                    <div className="flex">
+                        {['N', 'I', 'C', 'A'].map((l, i) => (
+                            <span key={i} className={`text-sm font-black ${nicaUtils[i].c} ${nicaUtils[i].r} ${nicaUtils[i].y} inline-block transition-all duration-300 group-hover:scale-110`}>
+                                {l}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { formatDrawDate } from '@/lib/dateUtils';
 
 interface Seller {
     id: string;
@@ -40,8 +41,10 @@ interface Liquidation {
     created_at: string;
 }
 
-export default function SellerDetailPage({ params }: { params: { id: string } }) {
-    const sellerId = params.id;
+export default function SellerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    // 🔥 FIX: Desenvolver params usando React.use() para Next.js 14/15
+    const { id: sellerId } = use(params);
+    
     const [seller, setSeller] = useState<Seller | null>(null);
     const [bets, setBets] = useState<Bet[]>([]);
     const [totals, setTotals] = useState<Totals>({ total_bets: 0, total_sales: 0, total_prizes: 0 });
@@ -56,17 +59,24 @@ export default function SellerDetailPage({ params }: { params: { id: string } })
 
     useEffect(() => {
         if (sellerId) {
-            fetchSellerData();
-            fetchSalesDetail();
-            fetchLiquidations();
+            refreshData();
         }
     }, [sellerId]);
 
+    // Recargar cuando cambian las fechas
     useEffect(() => {
-        if (sellerId) {
-            fetchSalesDetail();
-        }
+        if (sellerId) fetchSalesDetail();
     }, [startDate, endDate]);
+
+    const refreshData = async () => {
+        setLoading(true);
+        await Promise.all([
+            fetchSellerData(),
+            fetchSalesDetail(),
+            fetchLiquidations()
+        ]);
+        setLoading(false);
+    };
 
     const fetchSellerData = async () => {
         try {
@@ -86,17 +96,15 @@ export default function SellerDetailPage({ params }: { params: { id: string } })
 
     const fetchSalesDetail = async () => {
         try {
-            setLoading(true);
             const token = sessionStorage.getItem('token');
-            const data = await api.get(`/admin/sellers/${sellerId}/sales?start_date=${startDate}&end_date=${endDate}`, token);
+            // 🔥 FIX: El backend espera 'start' y 'end', no 'start_date' y 'end_date'
+            const data = await api.get(`/admin/sellers/${sellerId}/sales?start=${startDate}&end=${endDate}`, token);
             if (data && !data.error) {
                 setBets(data.bets || []);
                 setTotals(data.totals || { total_bets: 0, total_sales: 0, total_prizes: 0 });
             }
         } catch (err) { 
             console.error('Error fetching sales:', err); 
-        } finally { 
-            setLoading(false); 
         }
     };
 
@@ -153,102 +161,57 @@ export default function SellerDetailPage({ params }: { params: { id: string } })
     const calculateCommission = () => Number(totals.total_sales) * (commissionPct / 100);
     const calculateNet = () => Number(totals.total_sales) - Number(totals.total_prizes) - calculateCommission();
 
-    const formatDate = (dateStr: string) => {
-        if (!dateStr) return '';
-        return new Date(dateStr).toLocaleDateString('es-CR');
-    };
-
-    if (!seller && loading) {
-        return <div className="p-20 text-center text-gray-500">Cargando vendedor...</div>;
-    }
-
-    if (!seller) {
-        return <div className="p-20 text-center text-gray-500">Vendedor no encontrado</div>;
-    }
+    if (loading) return <div className="p-20 text-center text-gray-400 font-bold animate-pulse">Cargando datos del vendedor...</div>;
+    if (!seller) return <div className="p-20 text-center text-rose-500 font-bold">Vendedor no encontrado o ID inválido</div>;
 
     return (
-        <div className="min-h-screen bg-[#0f172a] text-white p-6">
+        <div className="min-h-screen bg-[#0f172a] text-white p-6 pb-24">
             {/* HEADER */}
             <header className="flex justify-between items-start mb-8">
                 <div className="flex items-center gap-4">
                     <button 
                         onClick={() => router.push('/admin/sellers')} 
-                        className="p-2 hover:bg-white/5 rounded-full transition-colors"
+                        className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all"
                     >
-                        ←
+                        ← Volver
                     </button>
                     <div>
-                        <h1 className="text-2xl font-black uppercase tracking-tighter">{seller.full_name}</h1>
-                        <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">
+                        <h1 className="text-3xl font-black uppercase tracking-tighter">{seller.full_name}</h1>
+                        <p className="text-xs text-emerald-400 font-bold uppercase tracking-widest opacity-70">
                             {seller.email} • {seller.phone_number}
                         </p>
                     </div>
                 </div>
                 <div className="text-right">
-                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest ${
-                        seller.is_active ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                    <span className={`px-4 py-2 rounded-2xl text-[10px] font-black tracking-widest ${
+                        seller.is_active ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
                     }`}>
-                        {seller.is_active ? 'ESTADO: ACTIVO' : 'ESTADO: INACTIVO'}
+                        {seller.is_active ? 'CUENTA ACTIVA' : 'CUENTA SUSPENDIDA'}
                     </span>
                 </div>
             </header>
 
-            {/* FILTROS DE PERIODO */}
-            <section className="bg-[#1e293b] p-6 mb-8 rounded-2xl border border-white/5">
-                <h2 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4">Período de Análisis</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black text-gray-500 uppercase">Fecha Inicial</label>
-                        <input 
-                            type="date" 
-                            value={startDate} 
-                            onChange={(e) => setStartDate(e.target.value)} 
-                            className="w-full bg-[#0f172a] border border-white/10 rounded-xl p-3 text-white"
-                        />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black text-gray-500 uppercase">Fecha Final</label>
-                        <input 
-                            type="date" 
-                            value={endDate} 
-                            onChange={(e) => setEndDate(e.target.value)} 
-                            className="w-full bg-[#0f172a] border border-white/10 rounded-xl p-3 text-white"
-                        />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black text-gray-500 uppercase">% Comisión</label>
-                        <input 
-                            type="number" 
-                            value={commissionPct} 
-                            onChange={(e) => setCommissionPct(Number(e.target.value))} 
-                            className="w-full bg-[#0f172a] border border-white/10 rounded-xl p-3 text-white"
-                        />
-                    </div>
-                </div>
-            </section>
-
-            {/* RESUMEN DE LIQUIDACIÓN */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-8">
-                <div className="bg-[#1e293b] p-6 rounded-2xl">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Ventas Totales</p>
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+                <div className="glass-panel p-6 border-white/5 bg-white/[0.02]">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Ventas Brutas</p>
                     <p className="text-3xl font-black text-white">₡{Number(totals.total_sales).toLocaleString()}</p>
-                    <p className="text-[9px] text-gray-500 uppercase mt-2">{totals.total_bets} Tickets</p>
+                    <p className="text-[9px] text-gray-500 uppercase mt-2">{totals.total_bets} Tickets emitidos</p>
                 </div>
-                <div className="bg-[#1e293b] p-6 rounded-2xl">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Premios a Pagar</p>
+                <div className="glass-panel p-6 border-white/5 bg-white/[0.02]">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Premios Generados</p>
                     <p className="text-3xl font-black text-rose-500">₡{Number(totals.total_prizes).toLocaleString()}</p>
                 </div>
-                <div className="bg-[#1e293b] p-6 rounded-2xl">
+                <div className="glass-panel p-6 border-white/5 bg-white/[0.02]">
                     <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Comisión ({commissionPct}%)</p>
                     <p className="text-3xl font-black text-emerald-400">₡{calculateCommission().toLocaleString()}</p>
                 </div>
-                <div className={`p-6 rounded-2xl border-2 ${
+                <div className={`glass-panel p-6 border-2 transition-all ${
                     calculateNet() >= 0 
                         ? 'border-emerald-500/30 bg-emerald-500/5' 
                         : 'border-rose-500/30 bg-rose-500/5'
                 }`}>
                     <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">
-                        {calculateNet() >= 0 ? 'Neto a Recibir' : 'Déficit (Vendedor Paga)'}
+                        {calculateNet() >= 0 ? 'Balance a Recibir' : 'Déficit de Caja'}
                     </p>
                     <p className={`text-4xl font-black ${calculateNet() >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                         ₡{Math.abs(calculateNet()).toLocaleString()}
@@ -256,122 +219,106 @@ export default function SellerDetailPage({ params }: { params: { id: string } })
                     <button 
                         onClick={handleLiquidate}
                         disabled={submitting || Number(totals.total_sales) === 0}
-                        className="w-full mt-4 py-2 bg-white text-black font-black text-[10px] rounded-lg uppercase tracking-widest hover:bg-emerald-400 transition-colors disabled:opacity-30"
+                        className="w-full mt-4 py-3 bg-white text-black font-black text-xs rounded-xl uppercase tracking-widest hover:bg-emerald-400 transition-all disabled:opacity-30"
                     >
-                        {submitting ? 'PROCESANDO...' : 'GENERAR LIQUIDACIÓN'}
+                        {submitting ? 'GENERANDO...' : 'LIQUIDAR CAJA'}
                     </button>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* TABLA DE APUESTAS DEL PERIODO */}
-                <div className="lg:col-span-2">
-                    <h3 className="text-xs font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
-                        📜 Detalle de Jugadas 
-                        <span className="text-[10px] text-gray-500 font-bold bg-white/5 px-2 py-0.5 rounded-full">{bets.length}</span>
-                    </h3>
-                    <div className="bg-[#1e293b] rounded-2xl overflow-hidden border border-white/5">
-                        <div className="max-h-[600px] overflow-y-auto">
-                            {loading ? (
-                                <div className="p-20 text-center text-gray-500">Cargando apuestas...</div>
-                            ) : bets.length === 0 ? (
-                                <div className="p-20 text-center text-gray-500">No hay apuestas en este período</div>
-                            ) : (
-                                <table className="w-full text-left">
-                                    <thead className="sticky top-0 bg-[#0f172a]">
-                                        <tr className="border-b border-white/10">
-                                            <th className="px-6 py-4 text-[9px] font-black uppercase text-gray-500">Info / Fecha</th>
-                                            <th className="px-6 py-4 text-[9px] font-black uppercase text-gray-500 text-center">Monto / Premio</th>
-                                            <th className="px-6 py-4 text-[9px] font-black uppercase text-gray-500 text-right">Acción</th>
+                {/* DETALLE DE JUGADAS */}
+                <div className="lg:col-span-2 space-y-4">
+                    <div className="flex justify-between items-center bg-[#1e293b] p-6 rounded-3xl border border-white/5">
+                        <h3 className="text-sm font-black text-white uppercase tracking-widest">📜 Historial de Ventas</h3>
+                        <div className="flex gap-2">
+                             <input type="date" value={startDate} onChange={(e)=>setStartDate(e.target.value)} className="bg-black/20 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-emerald-500" />
+                             <input type="date" value={endDate} onChange={(e)=>setEndDate(e.target.value)} className="bg-black/20 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-emerald-500" />
+                        </div>
+                    </div>
+                    
+                    <div className="glass-panel overflow-hidden border-white/5">
+                        <div className="max-h-[500px] overflow-y-auto custom-scrollbar">
+                            <table className="w-full text-left">
+                                <thead className="sticky top-0 bg-[#0f172a] z-10">
+                                    <tr className="border-b border-white/10">
+                                        <th className="px-6 py-4 text-[9px] font-black uppercase text-gray-500">Info / Fecha</th>
+                                        <th className="px-6 py-4 text-[9px] font-black uppercase text-gray-500 text-center">Monto / Premio</th>
+                                        <th className="px-6 py-4 text-[9px] font-black uppercase text-gray-500 text-right">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {bets.map((bet) => (
+                                        <tr key={bet.id} className="hover:bg-white/[0.02] transition-colors">
+                                            <td className="px-6 py-4">
+                                                <div className="flex gap-2 items-center mb-1">
+                                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${
+                                                        bet.lottery_type === 'TICA' ? 'bg-blue-500/20 text-blue-400' : 'bg-rose-500/20 text-rose-400'
+                                                    }`}>
+                                                        {bet.lottery_type}
+                                                    </span>
+                                                    <span className="text-[10px] text-white font-bold">
+                                                        {formatDrawDate(bet.draw_date)} • {bet.draw_time}
+                                                    </span>
+                                                </div>
+                                                <div className="text-[9px] text-gray-500 uppercase">{bet.player_name || 'Venta Local'}</div>
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <div className="text-xs font-bold text-white">₡{Number(bet.total_amount).toLocaleString()}</div>
+                                                {Number(bet.prize_amount) > 0 && (
+                                                    <div className="text-[10px] text-rose-400 font-bold">🏆 ₡{Number(bet.prize_amount).toLocaleString()}</div>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                {bet.prize_amount > 0 && !bet.prize_paid && (
+                                                    <button 
+                                                        onClick={() => handlePayPrize(bet.id)}
+                                                        className="px-4 py-1.5 bg-emerald-500 text-white text-[9px] font-black rounded-lg hover:bg-emerald-400 transition-all uppercase shadow-lg shadow-emerald-500/20"
+                                                    >
+                                                        Pagar
+                                                    </button>
+                                                )}
+                                                {bet.prize_paid && (
+                                                    <span className="text-[9px] font-black text-gray-600 uppercase">Pagado ✅</span>
+                                                )}
+                                            </td>
                                         </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/5">
-                                        {bets.map((bet) => (
-                                            <tr key={bet.id} className="hover:bg-white/[0.02] transition-colors">
-                                                <td className="px-6 py-4">
-                                                    <div className="flex gap-2 items-center mb-1">
-                                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${
-                                                            bet.lottery_type === 'TICA' 
-                                                                ? 'bg-blue-500/20 text-blue-400' 
-                                                                : 'bg-rose-500/20 text-rose-400'
-                                                        }`}>
-                                                            {bet.lottery_type}
-                                                        </span>
-                                                        <span className="text-[10px] text-white font-bold">
-                                                            {formatDate(bet.draw_date)} • {bet.draw_time}
-                                                        </span>
-                                                    </div>
-                                                    <div className="text-[9px] text-gray-500 uppercase">
-                                                        {bet.player_name || 'Sin nombre'}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <div className="text-xs font-bold text-white">₡{Number(bet.total_amount).toLocaleString()}</div>
-                                                    {Number(bet.prize_amount) > 0 && (
-                                                        <div className="text-[10px] text-rose-400 font-bold">🏆 ₡{Number(bet.prize_amount).toLocaleString()}</div>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    {bet.prize_amount > 0 && !bet.prize_paid && (
-                                                        <button 
-                                                            onClick={() => handlePayPrize(bet.id)}
-                                                            className="px-3 py-1 bg-emerald-500 text-white text-[9px] font-black rounded hover:bg-emerald-600 transition-all uppercase"
-                                                        >
-                                                            Pagar
-                                                        </button>
-                                                    )}
-                                                    {bet.prize_paid && (
-                                                        <span className="text-[9px] font-black text-gray-500 uppercase border border-white/10 px-2 py-1 rounded">
-                                                            Pagado ✅
-                                                        </span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            )}
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
 
-                {/* HISTORIAL DE LIQUIDACIONES */}
-                <div>
-                    <h3 className="text-xs font-black text-white uppercase tracking-widest mb-4">💰 Historial de Liquidaciones</h3>
-                    <div className="space-y-4">
-                        {liquidations.length === 0 ? (
-                            <div className="bg-[#1e293b] p-6 rounded-2xl text-center text-gray-500">
-                                No hay liquidaciones registradas
-                            </div>
-                        ) : (
-                            liquidations.map((liq) => (
-                                <div key={liq.id} className="bg-[#1e293b] p-4 rounded-2xl border border-white/5">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                                            liq.status === 'paid' 
-                                                ? 'bg-emerald-500/20 text-emerald-400' 
-                                                : 'bg-yellow-500/20 text-yellow-400'
-                                        }`}>
-                                            {liq.status === 'paid' ? 'COBRADO' : 'PENDIENTE'}
-                                        </span>
-                                        <span className="text-gray-500 text-[9px]">{formatDate(liq.created_at)}</span>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2 mt-3">
-                                        <div>
-                                            <p className="text-[8px] text-gray-500 uppercase font-bold">Ventas</p>
-                                            <p className="text-sm font-black text-white">₡{Number(liq.total_sales).toLocaleString()}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[8px] text-gray-500 uppercase font-bold">Neto</p>
-                                            <p className="text-sm font-black text-emerald-400">₡{Number(liq.net_amount).toLocaleString()}</p>
-                                        </div>
-                                    </div>
-                                    <p className="text-[8px] text-gray-600 mt-2 uppercase font-black tracking-tighter">
-                                        Periodo: {formatDate(liq.start_date)} al {formatDate(liq.end_date)}
-                                    </p>
+                {/* HISTORIAL LIQUIDACIONES */}
+                <div className="space-y-4">
+                    <h3 className="text-sm font-black text-white uppercase tracking-widest px-2">💰 Liquidaciones Previas</h3>
+                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                        {liquidations.map((liq) => (
+                            <div key={liq.id} className="glass-panel p-5 border-white/5 bg-white/[0.02]">
+                                <div className="flex justify-between items-start mb-3">
+                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                        liq.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-yellow-500/20 text-yellow-400'
+                                    }`}>
+                                        {liq.status === 'paid' ? 'COBRADO' : 'PENDIENTE'}
+                                    </span>
+                                    <span className="text-gray-500 text-[9px] font-bold">{formatDrawDate(liq.created_at)}</span>
                                 </div>
-                            ))
-                        )}
+                                <div className="grid grid-cols-2 gap-2 mb-3">
+                                    <div>
+                                        <p className="text-[8px] text-gray-500 uppercase font-bold">Ventas</p>
+                                        <p className="text-sm font-black text-white">₡{Number(liq.total_sales).toLocaleString()}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[8px] text-gray-500 uppercase font-bold">Recibido</p>
+                                        <p className="text-sm font-black text-emerald-400">₡{Number(liq.net_amount).toLocaleString()}</p>
+                                    </div>
+                                </div>
+                                <p className="text-[8px] text-gray-600 uppercase font-black tracking-tighter italic">
+                                    Periodo: {formatDrawDate(liq.start_date)} al {formatDrawDate(liq.end_date)}
+                                </p>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>

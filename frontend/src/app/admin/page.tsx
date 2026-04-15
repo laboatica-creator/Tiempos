@@ -90,9 +90,13 @@ export default function AdminDashboardPage() {
   return (
     <main className="min-h-screen bg-[#0f172a] p-4 lg:p-8 space-y-8 pb-32">
       <header className="flex justify-between items-center text-white">
-        <div>
-          <h1 className="text-3xl font-black uppercase tracking-tighter italic">Centro de Control</h1>
-          <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mt-1">Gestión General del Sistema</p>
+        <div className="flex items-center gap-6">
+          <Logo size="text-4xl" showSub={false} />
+          <div className="h-10 w-[1px] bg-white/10 hidden md:block"></div>
+          <div>
+            <h1 className="text-xl font-black uppercase tracking-tighter italic text-emerald-500">Centro de Control</h1>
+            <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Gestión General del Sistema</p>
+          </div>
         </div>
         <button 
             onClick={() => fetchData()}
