@@ -19,15 +19,31 @@ export default function AdminSellers() {
         try {
             setLoading(true);
             const token = sessionStorage.getItem('token');
-            const [sellersRes, statsRes] = await Promise.all([
-                api.get('/admin/sellers', token),
-                api.get('/admin/sellers/stats', token)
-            ]);
+            console.log('🔍 [ADMIN SELLERS] Token:', token ? 'OK (' + token.substring(0, 20) + '...)' : 'NO HAY TOKEN');
             
-            if (Array.isArray(sellersRes)) setSellers(sellersRes);
-            if (Array.isArray(statsRes)) setStats(statsRes);
+            console.log('🔍 [ADMIN SELLERS] Llamando a /admin/sellers...');
+            const sellersRes = await api.get('/admin/sellers', token);
+            console.log('🔍 [ADMIN SELLERS] sellersRes:', sellersRes);
+            
+            console.log('🔍 [ADMIN SELLERS] Llamando a /admin/sellers/stats...');
+            const statsRes = await api.get('/admin/sellers/stats', token);
+            console.log('🔍 [ADMIN SELLERS] statsRes:', statsRes);
+            
+            if (Array.isArray(sellersRes)) {
+                console.log('✅ Vendedores cargados:', sellersRes.length);
+                setSellers(sellersRes);
+            } else {
+                console.error('❌ sellersRes no es array:', sellersRes);
+            }
+            
+            if (Array.isArray(statsRes)) {
+                console.log('✅ Stats cargados:', statsRes.length);
+                setStats(statsRes);
+            } else {
+                console.error('❌ statsRes no es array:', statsRes);
+            }
         } catch (err) {
-            console.error('Error fetching admin sellers:', err);
+            console.error('❌ Error fetching admin sellers:', err);
         } finally {
             setLoading(false);
         }
