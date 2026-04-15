@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
 import Link from 'next/link';
+import Logo from '@/components/Logo';
 
 interface Stats {
   todaySales: number;
