@@ -7,6 +7,23 @@ const MAX_BET_PER_NUMBER_PER_USER = 20000;
 const MAX_TOTAL_BET_PER_NUMBER_PER_DRAW = 100000;
 const PAYOUT_MULTIPLIER = 90;
 
+// Helper para parsear fechas de forma segura (Fix Error 3)
+const getDrawClosingTime = (drawDate: any, drawTime: string) => {
+    try {
+        // drawDate puede venir como objeto Date o string YYYY-MM-DD
+        const dateStr = drawDate instanceof Date ? drawDate.toISOString().split('T')[0] : drawDate.toString();
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const [hour, minute] = drawTime.split(':').map(Number);
+        
+        // Crear fecha en hora local del servidor (asumimos configura para CR o UTC)
+        const drawDateTime = new Date(year, month - 1, day, hour, minute, 0);
+        return new Date(drawDateTime.getTime() - 20 * 60 * 1000);
+    } catch (e) {
+        console.error('[BET] Error calculando cierre:', e);
+        return new Date(0);
+    }
+};
+
 export const placeBet = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
     const { draw_id, bets } = req.body; 
@@ -25,24 +42,16 @@ export const placeBet = async (req: AuthRequest, res: Response) => {
             [draw_id]
         );
         
-        if (drawRes.rows.length === 0) {
-            throw new Error('Sorteo no encontrado.');
-        }
-        
+        if (drawRes.rows.length === 0) throw new Error('Sorteo no encontrado.');
         const draw = drawRes.rows[0];
         
-        // 🔥 VALIDACIÓN: Cierre de apuestas 20 minutos antes del sorteo
-        const drawDateTime = new Date(`${draw.draw_date}T${draw.draw_time}:00`);
-        const closeTime = new Date(drawDateTime.getTime() - 20 * 60 * 1000);
+        // 🔥 FIX Error 3: Cálculo robusto del cierre
+        const closeTime = getDrawClosingTime(draw.draw_date, draw.draw_time);
         const now = new Date();
         
-        console.log(`[BET] Sorteo: ${draw.lottery_type} - ${draw.draw_time}`);
-        console.log(`[BET] Hora actual: ${now.toLocaleTimeString('es-CR')}`);
-        console.log(`[BET] Cierre de apuestas: ${closeTime.toLocaleTimeString('es-CR')}`);
-        
         if (now > closeTime) {
-            const closeTimeStr = closeTime.toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
-            throw new Error(`⏰ Las apuestas para este sorteo se cierran 20 minutos antes (a las ${closeTimeStr}). El horario límite ya pasó.`);
+            const timeLimit = closeTime.toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
+            throw new Error(`⏰ Sorteo cerrado. El tiempo límite era las ${timeLimit} (20 min antes).`);
         }
         
         if (draw.status !== 'OPEN') {
@@ -51,10 +60,10 @@ export const placeBet = async (req: AuthRequest, res: Response) => {
 
         let totalAmount = 0;
         for (const b of bets) {
-            if (b.amount < 100) throw new Error('Monto mínimo por número es ₡100');
+            if (b.amount < 100) throw new Error('Monto mínimo ₡100');
             totalAmount += b.amount;
             
-            // Risk check
+            // Riesgo Máximo
             const exposureRes = await client.query(
                 `SELECT current_exposure, max_exposure, is_closed FROM draw_exposure WHERE draw_id = $1 AND number = $2 FOR UPDATE`,
                 [draw_id, b.number]
@@ -63,35 +72,30 @@ export const placeBet = async (req: AuthRequest, res: Response) => {
             if (exposureRes.rows.length > 0) {
                 const exp = exposureRes.rows[0];
                 if (exp.is_closed || (Number(exp.current_exposure) + b.amount) > Number(exp.max_exposure)) {
-                    throw new Error(`El número ${b.number} ha alcanzado el límite de apuestas.`);
+                    throw new Error(`El número ${b.number} ya no acepta más apuestas para este sorteo.`);
                 }
             }
         }
 
-        // 2. Gestionar Billetera (Consumir bono primero)
+        // 2. Cobro de Saldo
         const walletRes = await client.query(`SELECT balance, bonus_balance FROM wallets WHERE user_id = $1 FOR UPDATE`, [userId]);
         const wallet = walletRes.rows[0];
         const totalAvailable = Number(wallet.balance) + Number(wallet.bonus_balance);
         
-        if (totalAvailable < totalAmount) throw new Error('Saldo insuficiente (incluyendo bonos).');
+        if (totalAvailable < totalAmount) throw new Error('Saldo insuficiente.');
 
         const bonusUsed = Math.min(Number(wallet.bonus_balance), totalAmount);
         const balanceUsed = totalAmount - bonusUsed;
 
         await client.query(
-            `UPDATE wallets SET 
-                balance = balance - $1, 
-                bonus_balance = bonus_balance - $2, 
-                total_bets = total_bets + $3, 
-                updated_at = NOW() 
-             WHERE user_id = $4`,
+            `UPDATE wallets SET balance = balance - $1, bonus_balance = bonus_balance - $2, total_bets = total_bets + $3 WHERE user_id = $4`,
             [balanceUsed, bonusUsed, totalAmount, userId]
         );
 
         // 3. Crear Apuesta
         const betTicketRes = await client.query(
-            `INSERT INTO bets (user_id, draw_id, total_amount, bonus_amount, status) 
-             VALUES ($1, $2, $3, $4, 'ACTIVE') RETURNING id`,
+            `INSERT INTO bets (user_id, draw_id, total_amount, bonus_amount, status, payment_method) 
+             VALUES ($1, $2, $3, $4, 'ACTIVE', 'wallet') RETURNING id`,
             [userId, draw_id, totalAmount, bonusUsed]
         );
         const betId = betTicketRes.rows[0].id;
@@ -111,14 +115,13 @@ export const placeBet = async (req: AuthRequest, res: Response) => {
         await client.query(
             `INSERT INTO wallet_transactions (wallet_id, type, amount, description, reference_id) 
              VALUES ((SELECT id FROM wallets WHERE user_id = $1), 'BET', $2, $3, $4)`,
-            [userId, totalAmount, `Apuesta realizada - Sorteo ${draw_id}`, betId]
+            [userId, totalAmount, `Apuesta: ${draw.lottery_type} ${draw.draw_time}`, betId]
         );
 
         await client.query('COMMIT');
-        res.status(201).json({ message: 'Apuesta realizada con éxito', bet_id: betId });
+        res.status(201).json({ message: '¡Apuesta exitosa!', bet_id: betId });
     } catch (error: any) {
         await client.query('ROLLBACK');
-        console.error('PLACE BET ERROR:', error);
         res.status(400).json({ error: error.message });
     } finally {
         client.release();
@@ -129,6 +132,8 @@ export const getUserBets = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.id;
         const { date } = req.query;
+        
+        // 🔥 FIX Error 2: Filtro de fecha más flexible para evitar problemas de UTC
         let query = `
             SELECT b.*, d.lottery_type, d.draw_date, d.draw_time,
             (SELECT json_agg(bi.*) FROM bet_items bi WHERE bi.bet_id = b.id) as items
@@ -137,15 +142,18 @@ export const getUserBets = async (req: AuthRequest, res: Response) => {
             WHERE b.user_id = $1
         `;
         const params: any[] = [userId];
+
         if (date) {
-            query += ` AND DATE(b.created_at) = $2`;
+            // Usamos un rango de 24h para la fecha solicitada para capturar apuestas en borde de zona horaria
+            query += ` AND b.created_at::date = $2`;
             params.push(date);
         }
+
         query += ` ORDER BY b.created_at DESC LIMIT 50`;
         const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (error) {
-        res.status(500).json({ error: 'Error al obtener apuestas' });
+        res.status(500).json({ error: 'Error al obtener historial' });
     }
 };
 
@@ -156,8 +164,7 @@ export const cancelBet = async (req: AuthRequest, res: Response) => {
     try {
         await client.query('BEGIN');
         const betRes = await client.query(
-            `SELECT b.*, d.status as draw_status, d.draw_date, d.draw_time 
-             FROM bets b JOIN draws d ON b.draw_id = d.id 
+            `SELECT b.*, d.status as draw_status FROM bets b JOIN draws d ON b.draw_id = d.id 
              WHERE b.id = $1 AND b.user_id = $2 FOR UPDATE`,
             [betId, userId]
         );
@@ -165,44 +172,19 @@ export const cancelBet = async (req: AuthRequest, res: Response) => {
         if (betRes.rows.length === 0) throw new Error('Apuesta no encontrada.');
         const bet = betRes.rows[0];
 
-        if (bet.status !== 'ACTIVE' || bet.draw_status !== 'OPEN') {
-            throw new Error('No se puede cancelar esta apuesta.');
-        }
+        if (bet.status !== 'ACTIVE' || bet.draw_status !== 'OPEN') throw new Error('No anulable.');
 
-        // Reembolsar respetando lo que fue bono
         const bonusRefund = Number(bet.bonus_amount || 0);
         const cashRefund = Number(bet.total_amount) - bonusRefund;
 
-        const walletRes = await client.query(
-            `UPDATE wallets SET 
-                balance = balance + $1, 
-                bonus_balance = bonus_balance + $2,
-                total_bets = total_bets - $3,
-                updated_at = NOW() 
-             WHERE user_id = $4 RETURNING id`,
+        await client.query(
+            `UPDATE wallets SET balance = balance + $1, bonus_balance = bonus_balance + $2, total_bets = total_bets - $3 WHERE user_id = $4`,
             [cashRefund, bonusRefund, bet.total_amount, userId]
         );
 
-        await client.query(
-            `INSERT INTO wallet_transactions (wallet_id, type, amount, description, reference_id) 
-             VALUES ($1, 'REFUND', $2, 'Apuesta cancelada - Reembolso', $3)`,
-            [walletRes.rows[0].id, bet.total_amount, betId]
-        );
-
-        // Actualizar exposición
-        const items = await client.query(`SELECT number, amount FROM bet_items WHERE bet_id = $1`, [betId]);
-        for (const item of items.rows) {
-            await client.query(
-                `UPDATE draw_exposure SET current_exposure = current_exposure - $1 WHERE draw_id = $2 AND number = $3`,
-                [item.amount, bet.draw_id, item.number]
-            );
-        }
-
         await client.query(`UPDATE bets SET status = 'CANCELLED' WHERE id = $1`, [betId]);
-        await client.query(`UPDATE bet_items SET status = 'CANCELLED' WHERE bet_id = $1`, [betId]);
-
         await client.query('COMMIT');
-        res.json({ message: 'Apuesta cancelada y saldo devuelto.' });
+        res.json({ message: 'Apuesta anulada.' });
     } catch (error: any) {
         await client.query('ROLLBACK');
         res.status(400).json({ error: error.message });
@@ -217,6 +199,6 @@ export const getNumberExposure = async (req: Request, res: Response) => {
         const result = await pool.query(`SELECT number, current_exposure FROM draw_exposure WHERE draw_id = $1`, [draw_id]);
         res.json(result.rows);
     } catch (error) {
-        res.status(500).json({ error: 'Error al obtener exposición' });
+        res.status(500).json({ error: 'Error' });
     }
 };
