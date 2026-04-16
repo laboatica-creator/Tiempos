@@ -3,15 +3,24 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { formatDrawDate } from '@/lib/dateUtils';
 import Logo from '@/components/Logo';
 
+interface HistoryItem {
+    id: string;
+    total_amount: number;
+    created_at: string;
+    lottery_type: string;
+    draw_date: string;
+    draw_time: string;
+    status: string;
+}
+
 export default function SellerHistory() {
-    const [bets, setBets] = useState<any[]>([]);
-    const [totals, setTotals] = useState({ total_sales: 0, total_bets: 0 });
-    const [loading, setLoading] = useState(true);
+    const [history, setHistory] = useState<HistoryItem[]>([]);
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+    const [loading, setLoading] = useState(true);
+    const [totals, setTotals] = useState({ total_sales: 0, total_bets: 0 });
     
     const router = useRouter();
 
@@ -23,11 +32,13 @@ export default function SellerHistory() {
         try {
             setLoading(true);
             const token = sessionStorage.getItem('token');
-            const data = await api.get(`/seller/sales-history?start=${startDate}&end=${endDate}`, token);
-            if (Array.isArray(data)) {
-                setBets(data);
-                const totalAmount = data.reduce((s: number, b: any) => s + Number(b.total_amount), 0);
-                setTotals({ total_sales: totalAmount, total_bets: data.length });
+            const data = await api.get(`/seller/history?start=${startDate}&end=${endDate}`, token);
+            if (data && !data.error) {
+                setHistory(data.bets || []);
+                setTotals({
+                    total_sales: data.total_sales || 0,
+                    total_bets: data.total_bets || 0
+                });
             }
         } catch (err) {
             console.error('Error fetching history:', err);
@@ -37,93 +48,92 @@ export default function SellerHistory() {
     };
 
     return (
-        <div className="min-h-screen bg-[#0f172a] text-white p-4 pb-24">
-            <header className="flex justify-between items-center mb-6 glass-panel p-4 border-emerald-500/20">
-                <div className="flex items-center gap-3">
-                    <button onClick={() => router.push('/seller/dashboard')} className="text-emerald-400">←</button>
+        <div className="min-h-screen bg-[#0f172a] text-white p-4 lg:p-8 pb-24">
+            
+            {/* HEADER */}
+            <header className="flex justify-between items-center mb-10">
+                <div className="flex items-center gap-4">
+                    <button onClick={() => router.push('/seller/dashboard')} className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all">← Terminal</button>
                     <Logo size="text-xl" />
-                    <span className="text-gray-500 text-[10px] font-black uppercase tracking-widest">Historial</span>
                 </div>
+                <h1 className="text-sm font-black uppercase tracking-widest text-emerald-400">Historial de Ventas</h1>
             </header>
 
             {/* FILTROS */}
-            <section className="glass-panel p-6 mb-6">
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black text-gray-500 uppercase">Inicio</label>
-                        <input
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm"
-                        />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black text-gray-500 uppercase">Fin</label>
-                        <input
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-sm"
-                        />
-                    </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="bg-[#1e293b] p-6 rounded-3xl border border-white/5 shadow-2xl space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Desde</label>
+                    <input 
+                        type="date" 
+                        value={startDate} 
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm outline-none focus:border-emerald-500"
+                    />
                 </div>
-            </section>
-
-            {/* TOTALES DEL PERIODO */}
-            <div className="grid grid-cols-2 gap-3 mb-6">
-                <div className="glass-panel p-4 border-emerald-500/20">
-                    <p className="text-[9px] font-black text-gray-500 uppercase">Total Vendido</p>
-                    <p className="text-xl font-black text-emerald-400">₡{totals.total_sales.toLocaleString()}</p>
+                <div className="bg-[#1e293b] p-6 rounded-3xl border border-white/5 shadow-2xl space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Hasta</label>
+                    <input 
+                        type="date" 
+                        value={endDate} 
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm outline-none focus:border-emerald-500"
+                    />
                 </div>
-                <div className="glass-panel p-4 border-blue-500/20">
-                    <p className="text-[9px] font-black text-gray-500 uppercase">Tickets</p>
-                    <p className="text-xl font-black text-blue-400">{totals.total_bets}</p>
+                <div className="bg-emerald-500/10 border border-emerald-500/20 p-6 rounded-3xl flex flex-col justify-center items-center text-center">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Ventas del Período</p>
+                    <p className="text-3xl font-black text-emerald-400 font-outfit">₡{Number(totals.total_sales).toLocaleString()}</p>
+                    <p className="text-[9px] text-gray-500 font-bold uppercase">{totals.total_bets} Tickets</p>
                 </div>
             </div>
 
-            {/* LISTA DE APUESTAS */}
-            <section className="space-y-3">
-                {loading ? (
-                    <div className="text-center py-20 text-gray-500">Cargando...</div>
-                ) : bets.length === 0 ? (
-                    <div className="text-center py-20 text-gray-500 italic">No hay ventas registradas en este periodo</div>
-                ) : (
-                    bets.map((bet) => (
-                        <div key={bet.id} className="glass-panel p-4 border-white/5 flex justify-between items-center group">
-                            <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${bet.lottery_type === 'TICA' ? 'bg-blue-500/20 text-blue-400' : 'bg-rose-500/20 text-rose-400'}`}>
-                                        {bet.lottery_type}
-                                    </span>
-                                    <span className="text-white font-black italic">₡{Number(bet.total_amount).toLocaleString()}</span>
-                                </div>
-                                <p className="text-gray-400 text-[10px]">{formatDrawDate(bet.draw_date)} - {bet.draw_time}</p>
-                                <p className="text-gray-600 text-[8px] mt-1 font-mono uppercase tracking-tighter">ID: {bet.id.substring(0,8)}... • {bet.items_count} Números</p>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-emerald-500 font-bold text-xs uppercase">{new Date(bet.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                                <button className="mt-2 text-[8px] font-black text-gray-500 group-hover:text-emerald-400 uppercase tracking-widest transition-colors">Re-imprimir</button>
-                            </div>
-                        </div>
-                    ))
-                )}
-            </section>
-
-            <nav className="fixed bottom-0 left-0 right-0 glass-panel border-t border-emerald-500/20 p-4 flex justify-around items-center z-40 bg-[#0f172a]/95 backdrop-blur-xl">
-                <button onClick={() => router.push('/seller/dashboard')} className="flex flex-col items-center gap-1 text-gray-500">
-                    <span className="text-xl">🏪</span>
-                    <span className="text-[10px] font-black uppercase">Terminal</span>
-                </button>
-                <button onClick={() => router.push('/seller/history')} className="flex flex-col items-center gap-1 text-emerald-400">
-                    <span className="text-xl">📜</span>
-                    <span className="text-[10px] font-black uppercase">Historial</span>
-                </button>
-                <button onClick={() => { sessionStorage.clear(); router.push('/login'); }} className="flex flex-col items-center gap-1 text-gray-500 hover:text-rose-500 transition-colors">
-                    <span className="text-xl">🚪</span>
-                    <span className="text-[10px] font-black uppercase">Salir</span>
-                </button>
-            </nav>
+            {/* TABLA DE RESULTADOS */}
+            <div className="bg-[#1e293b] rounded-[2rem] border border-white/5 overflow-hidden shadow-2xl">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead className="bg-black/30">
+                            <tr>
+                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500">Fecha / Hora</th>
+                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500 text-center">Lotería</th>
+                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500 text-center">Monto</th>
+                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500 text-center">ID Ticket</th>
+                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-500 text-right">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            {loading ? (
+                                Array.from({length: 5}).map((_, i) => (
+                                    <tr key={i} className="animate-pulse"><td colSpan={5} className="px-6 py-6 bg-white/5"></td></tr>
+                                ))
+                            ) : history.length === 0 ? (
+                                <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-500 uppercase font-black text-xs italic tracking-widest">No hay ventas registradas</td></tr>
+                            ) : (
+                                history.map((item) => (
+                                    <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
+                                        <td className="px-6 py-5">
+                                            <p className="font-black text-sm">{new Date(item.created_at).toLocaleDateString()}</p>
+                                            <p className="text-[10px] text-gray-500 font-bold">{new Date(item.created_at).toLocaleTimeString()}</p>
+                                        </td>
+                                        <td className="px-6 py-5 text-center">
+                                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase border ${item.lottery_type === 'TICA' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
+                                                {item.lottery_type} | {item.draw_time}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-5 text-center">
+                                            <p className="font-black text-lg italic tracking-tighter">₡{Number(item.total_amount).toLocaleString()}</p>
+                                        </td>
+                                        <td className="px-6 py-5 text-center text-[10px] font-mono text-gray-600">
+                                            {item.id.split('-')[0].toUpperCase()}
+                                        </td>
+                                        <td className="px-6 py-5 text-right">
+                                            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">✅ Activo</span>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     );
 }

@@ -23,8 +23,8 @@ router.post('/cash-bet', createCashBet);
 // Ventas del día
 router.get('/today-sales', getTodaySales);
 
-// Historial de ventas
-router.get('/sales-history', getSalesHistory);
+// Historial de ventas (Nombre de ruta unificado con frontend)
+router.get('/history', getSalesHistory);
 
 // Obtener datos del ticket para imprimir
 router.get('/ticket/:betId', getTicketData);

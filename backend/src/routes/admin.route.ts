@@ -20,20 +20,14 @@ import { approveRecharge, rejectRecharge, getPendingRecharges, adjustWalletBalan
 import { exportDatabase, importDatabase } from '../controllers/backup.controller';
 import { authenticateJWT, requireRole, requirePermission } from '../middlewares/auth.middleware';
 import { setWinningNumber, cancelDraw, getSuggestedResults, liquidateDraw } from '../controllers/draw.controller';
-// 🔥 NUEVO: Importar controladores de vendedores
-import { 
-    getAllSellers, 
-    getAllSellersStats, 
-    toggleSellerStatus,
-    getSellerSalesDetail
-} from '../controllers/admin-seller.controller';
 
-// 🔥 NUEVO: Importar controladores de liquidaciones
+// Controladores de vendedores unificados
 import { 
-    liquidateSeller, 
-    payPrize, 
-    getSellerLiquidations,
-    markLiquidationPaid
+    getSellers,
+    getSellerDetail,
+    payPrize,
+    liquidatePeriod,
+    toggleSellerStatus
 } from '../controllers/admin-seller.controller';
 
 const router = Router();
@@ -82,30 +76,13 @@ router.post('/draws/cancel/:drawId', authenticateJWT, requirePermission('draws')
 router.post('/draws/liquidate', authenticateJWT, requirePermission('draws'), liquidateDraw);
 router.get('/draws/suggested-results', authenticateJWT, requirePermission('draws'), getSuggestedResults);
 
-// ==================== RUTAS DE VENDEDORES ====================
-// Obtener todos los vendedores
-router.get('/sellers', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), getAllSellers);
-
-// Obtener estadísticas de vendedores
-router.get('/sellers/stats', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), getAllSellersStats);
-
-// Activar/Desactivar vendedor
-router.post('/sellers/:sellerId/toggle-status', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), toggleSellerStatus);
-
-// Obtener ventas detalladas de un vendedor
-router.get('/sellers/:sellerId/sales', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), getSellerSalesDetail);
+// ==================== RUTAS DE VENDEDORES (SINCRONIZADAS) ====================
+router.get('/sellers', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), getSellers);
+router.get('/sellers/:id/detail', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), getSellerDetail);
+router.post('/sellers/:id/toggle-status', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), toggleSellerStatus);
 
 // ==================== RUTAS DE LIQUIDACIONES Y PAGOS ====================
-// Liquidar ventas de un vendedor
-router.post('/sellers/liquidate', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), liquidateSeller);
-
-// Pagar premio de una apuesta
+router.post('/sellers/liquidate', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), liquidatePeriod);
 router.post('/sellers/pay-prize/:betId', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), payPrize);
-
-// Obtener liquidaciones de un vendedor
-router.get('/sellers/:sellerId/liquidations', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), getSellerLiquidations);
-
-// Marcar liquidación como pagada
-router.post('/sellers/liquidations/:liquidationId/pay', authenticateJWT, requireRole(['ADMIN', 'FRANCHISE']), markLiquidationPaid);
 
 export default router;

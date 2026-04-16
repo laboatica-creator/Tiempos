@@ -96,19 +96,37 @@ export const createCashBet = async (req: AuthRequest, res: Response) => {
 
 // ... (El resto de funciones se mantienen iguales)
 export const getActiveDraws = async (req: AuthRequest, res: Response) => {
+    const { type, date } = req.query;
     try {
-        const draws = await pool.query(`
+        let query = `
             SELECT d.*, 
                    CASE 
                        WHEN (d.draw_date + d.draw_time) - INTERVAL '20 minutes' <= NOW() THEN false 
                        ELSE true 
                    END as is_open
             FROM draws d
-            WHERE d.draw_date >= CURRENT_DATE AND d.status = 'OPEN'
-            ORDER BY d.draw_date, d.draw_time
-        `);
+            WHERE 1=1
+        `;
+        const params: any[] = [];
+
+        if (date) {
+            params.push(date);
+            query += ` AND d.draw_date = $${params.length}`;
+        } else {
+            query += ` AND d.draw_date >= CURRENT_DATE`;
+        }
+
+        if (type) {
+            params.push(type);
+            query += ` AND d.lottery_type = $${params.length}`;
+        }
+
+        query += ` ORDER BY d.draw_date, d.draw_time`;
+        
+        const draws = await pool.query(query, params);
         res.json(draws.rows);
     } catch (error) {
+        console.error('Error al obtener sorteos:', error);
         res.status(500).json({ error: 'Error al obtener sorteos' });
     }
 };
