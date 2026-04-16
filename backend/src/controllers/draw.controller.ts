@@ -42,8 +42,15 @@ export const getDraws = async (req: Request, res: Response) => {
     try {
         const { date, status } = req.query;
         
-        const today = new Date().toISOString().split('T')[0];
-        console.log(`[DRAWS] Fecha actual: ${today}`);
+        // 🔥 Obtener fecha actual de Costa Rica de forma robusta
+        const today = new Intl.DateTimeFormat('en-CA', { 
+            timeZone: 'America/Costa_Rica',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).format(new Date());
+
+        console.log(`[DRAWS] Fecha hoy CR: ${today}`);
 
         let query = `
             SELECT 
@@ -56,10 +63,8 @@ export const getDraws = async (req: Request, res: Response) => {
                 d.max_exposure_limit,
                 d.min_bet,
                 d.max_bet,
-                d.created_at,
-                d.updated_at,
                 d.is_settled,
-                (SELECT COALESCE(SUM(total_amount), 0) FROM bets WHERE draw_id = d.id AND status != 'CANCELLED') as total_sold
+                (SELECT COALESCE(SUM(total_amount), 0) FROM bets WHERE draw_id = d.id AND status != 'CANCELLED' AND status != 'refunded') as total_sold
             FROM draws d 
             WHERE 1=1
         `;
@@ -70,17 +75,17 @@ export const getDraws = async (req: Request, res: Response) => {
             query += ` AND d.draw_date = $${params.length}`;
         } else if (status === 'ACTIVE') {
             params.push(today);
-            query += ` AND d.draw_date >= $${params.length} AND d.status IN ('OPEN', 'CLOSED')`;
+            query += ` AND d.draw_date >= $${params.length} AND d.status = 'OPEN'`;
         }
 
         query += ` ORDER BY d.draw_date ASC, d.draw_time ASC LIMIT 100`;
 
         const result = await pool.query(query, params);
-        
         let draws = result.rows;
         
         if (status === 'ACTIVE') {
             draws = draws.map(draw => {
+                // draw.draw_date ya viene formateado como YYYY-MM-DD por el TO_CHAR
                 const isOpen = isDrawOpenForBets(draw.draw_time, draw.draw_date);
                 draw.can_bet = isOpen;
                 return draw;
