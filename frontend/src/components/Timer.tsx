@@ -13,13 +13,15 @@ const Timer = ({ drawDate, drawTime, onExpire }: TimerProps) => {
     const [isExpired, setIsExpired] = useState(false);
 
     useEffect(() => {
-        const calculateTime = () => {
+        const calculate = () => {
             try {
-                const [year, month, day] = drawDate.split('-').map(Number);
-                const [hour, minute] = drawTime.split(':').map(Number);
+                // Parseo manual para evitar 'Invalid Date'
+                const datePart = drawDate.split('T')[0];
+                const [y, m, d] = datePart.split('-').map(Number);
+                const [h, min] = drawTime.split(':').map(Number);
                 
-                const drawDateTime = new Date(year, month - 1, day, hour, minute, 0);
-                const closeTime = new Date(drawDateTime.getTime() - 20 * 60 * 1000); // 20 min antes
+                const drawDateTime = new Date(y, m - 1, d, h, min, 0);
+                const closeTime = new Date(drawDateTime.getTime() - 20 * 60 * 1000);
                 const now = new Date();
 
                 const diff = closeTime.getTime() - now.getTime();
@@ -30,27 +32,25 @@ const Timer = ({ drawDate, drawTime, onExpire }: TimerProps) => {
                         setIsExpired(true);
                         if (onExpire) onExpire();
                     }
-                    return;
+                } else {
+                    const hours = Math.floor(diff / (1000 * 60 * 60));
+                    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                    setTimeLeft(`${hours > 0 ? hours + 'h ' : ''}${minutes}m ${seconds}s`);
+                    setIsExpired(false);
                 }
-
-                const hours = Math.floor(diff / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-                setTimeLeft(`${hours > 0 ? hours + 'h ' : ''}${minutes}m ${seconds}s`);
             } catch (e) {
                 setTimeLeft('--:--');
             }
         };
 
-        const timer = setInterval(calculateTime, 1000);
-        calculateTime();
-
-        return () => clearInterval(timer);
+        const interval = setInterval(calculate, 1000);
+        calculate();
+        return () => clearInterval(interval);
     }, [drawDate, drawTime, isExpired, onExpire]);
 
     return (
-        <span className={`font-mono ${isExpired ? 'text-rose-500' : 'text-emerald-400'}`}>
+        <span className={`font-mono ${isExpired ? 'text-rose-500' : 'text-emerald-400 font-bold'}`}>
             {timeLeft}
         </span>
     );
