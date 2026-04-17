@@ -43,9 +43,19 @@ export default function SellerDashboard() {
     const fetchDraws = async () => {
         try {
             const token = sessionStorage.getItem('token');
-            const data = await api.get(`/seller/draws?type=${selectedType}&date=${selectedDate}`, token);
-            if (Array.isArray(data)) setDraws(data);
-        } catch (err) { console.error(err); }
+            const url = `/seller/draws?type=${selectedType}&date=${selectedDate}`;
+            console.log('🔍 Fetching draws:', url);
+            const data = await api.get(url, token);
+            console.log('📦 Draws recibidos:', data);
+            if (Array.isArray(data)) {
+                setDraws(data);
+            } else {
+                console.error('❌ Error: data no es array', data);
+                setDraws([]);
+            }
+        } catch (err) { 
+            console.error('❌ Error fetching draws:', err); 
+        }
     };
 
     const handleRegister = async () => {
@@ -59,23 +69,31 @@ export default function SellerDashboard() {
             
             const response = await api.post('/seller/cash-bet', {
                 draw_id: selectedDraw.id,
-                player_name: 'Jugador en efectivo', // Requerimiento #5 y #8
+                player_name: 'Jugador en efectivo',
                 player_phone: '00000000',
                 items: Array.from(selectedNumbers).map(n => ({ number: n, amount }))
             }, token);
+
+            console.log('📝 Respuesta registro:', response);
 
             if (response.success) {
                 const ticket = await api.get(`/seller/ticket/${response.bet_id}`, token);
                 setShowTicket(ticket);
                 setSelectedNumbers(new Set());
                 setSelectedDraw(null);
+                alert('✅ Apuesta registrada exitosamente');
             } else {
                 alert(response.error || 'Error al registrar');
             }
-        } catch (err) { alert('Fallo de red'); } finally { setSubmitting(false); }
+        } catch (err) { 
+            console.error('❌ Error en registro:', err);
+            alert('Fallo de red'); 
+        } finally { 
+            setSubmitting(false); 
+        }
     };
 
-    // VISTA INICIAL: SOLO DOS BOTONES GRANDES (Requerimiento #1)
+    // VISTA INICIAL: SOLO DOS BOTONES GRANDES
     if (!selectedType) {
         return (
             <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center p-6 bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a]">
@@ -102,7 +120,7 @@ export default function SellerDashboard() {
         );
     }
 
-    // VISTA DE TERMINAL (Requerimiento #2, #3, #4, #5)
+    // VISTA DE TERMINAL
     return (
         <div className="min-h-screen bg-[#0f172a] text-white p-4">
             <header className="flex justify-between items-center mb-6 bg-[#1e293b] p-4 rounded-3xl border border-white/5">
@@ -125,25 +143,31 @@ export default function SellerDashboard() {
 
                     {/* Sorteos con Timer y Bloqueo */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {draws.map(draw => {
-                            const isClosed = closedDraws[draw.id];
-                            return (
-                                <button
-                                    key={draw.id}
-                                    onClick={() => !isClosed && setSelectedDraw(draw)}
-                                    className={`p-5 rounded-3xl border-2 transition-all text-left relative ${isClosed ? 'opacity-20 grayscale cursor-not-allowed border-transparent' : selectedDraw?.id === draw.id ? 'bg-emerald-500/20 border-emerald-500' : 'bg-[#1e293b] border-transparent'}`}
-                                >
-                                    <p className="text-xl font-black italic">{draw.draw_time}</p>
-                                    <div className="mt-2 text-[10px] font-black">
-                                        <Timer drawTime={draw.draw_time} drawDate={draw.draw_date} onExpire={() => setClosedDraws(prev => ({...prev, [draw.id]: true}))} />
-                                    </div>
-                                    {isClosed && <p className="text-[8px] text-rose-500 font-bold uppercase mt-1">Cerrado</p>}
-                                </button>
-                            );
-                        })}
+                        {draws.length === 0 ? (
+                            <div className="col-span-4 text-center py-10 text-gray-500">
+                                No hay sorteos disponibles para esta fecha
+                            </div>
+                        ) : (
+                            draws.map(draw => {
+                                const isClosed = closedDraws[draw.id];
+                                return (
+                                    <button
+                                        key={draw.id}
+                                        onClick={() => !isClosed && setSelectedDraw(draw)}
+                                        className={`p-5 rounded-3xl border-2 transition-all text-left relative ${isClosed ? 'opacity-20 grayscale cursor-not-allowed border-transparent' : selectedDraw?.id === draw.id ? 'bg-emerald-500/20 border-emerald-500' : 'bg-[#1e293b] border-transparent'}`}
+                                    >
+                                        <p className="text-xl font-black italic">{draw.draw_time}</p>
+                                        <div className="mt-2 text-[10px] font-black">
+                                            <Timer drawTime={draw.draw_time} drawDate={draw.draw_date} onExpire={() => setClosedDraws(prev => ({...prev, [draw.id]: true}))} />
+                                        </div>
+                                        {isClosed && <p className="text-[8px] text-rose-500 font-bold uppercase mt-1">Cerrado</p>}
+                                    </button>
+                                );
+                            })
+                        )}
                     </div>
 
-                    {/* Grid de 7 Columnas (Requerimiento #3) */}
+                    {/* Grid de 7 Columnas */}
                     {selectedDraw && (
                         <div className="bg-[#1e293b] p-6 rounded-[3rem] border border-white/5">
                             <h3 className="text-[10px] font-black text-gray-500 uppercase text-center mb-6 tracking-widest">Seleccione Números</h3>
@@ -170,7 +194,7 @@ export default function SellerDashboard() {
                     )}
                 </div>
 
-                {/* Panel Derecho de Pago (Requerimiento #4) */}
+                {/* Panel Derecho de Pago */}
                 <div className="space-y-6">
                     <div className="bg-[#1e293b] p-8 rounded-[3rem] border border-white/5 flex flex-col gap-6">
                         <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Resumen de Venta</h3>
@@ -205,7 +229,7 @@ export default function SellerDashboard() {
                 </div>
             </div>
 
-            {/* MODAL DE TICKET (Requerimiento #7, #8) */}
+            {/* MODAL DE TICKET */}
             {showTicket && (
                 <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4">
                     <div className="bg-white text-black p-8 rounded-[2rem] w-full max-w-[340px] font-mono shadow-2xl">

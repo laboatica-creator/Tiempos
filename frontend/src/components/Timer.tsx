@@ -3,57 +3,69 @@
 import React, { useState, useEffect } from 'react';
 
 interface TimerProps {
-    drawDate: string;
     drawTime: string;
+    drawDate: string;
     onExpire?: () => void;
 }
 
-const Timer = ({ drawDate, drawTime, onExpire }: TimerProps) => {
+export default function Timer({ drawTime, drawDate, onExpire }: TimerProps) {
     const [timeLeft, setTimeLeft] = useState<string>('');
-    const [isExpired, setIsExpired] = useState(false);
+    const [isClosed, setIsClosed] = useState<boolean>(false);
 
     useEffect(() => {
-        const calculate = () => {
+        const calculateTimeLeft = () => {
             try {
-                // Parseo manual para evitar 'Invalid Date'
-                const datePart = drawDate.split('T')[0];
-                const [y, m, d] = datePart.split('-').map(Number);
-                const [h, min] = drawTime.split(':').map(Number);
+                // Parsear fecha y hora correctamente
+                const [year, month, day] = drawDate.split('-');
+                const [hour, minute] = drawTime.split(':');
                 
-                const drawDateTime = new Date(y, m - 1, d, h, min, 0);
-                const closeTime = new Date(drawDateTime.getTime() - 20 * 60 * 1000);
+                const drawDateTime = new Date(
+                    parseInt(year),
+                    parseInt(month) - 1,
+                    parseInt(day),
+                    parseInt(hour),
+                    parseInt(minute),
+                    0
+                );
+                
+                // Cierre 20 minutos antes
+                const closeDateTime = new Date(drawDateTime.getTime() - 20 * 60 * 1000);
                 const now = new Date();
-
-                const diff = closeTime.getTime() - now.getTime();
-
-                if (diff <= 0) {
+                
+                if (now >= closeDateTime) {
+                    setIsClosed(true);
                     setTimeLeft('CERRADO');
-                    if (!isExpired) {
-                        setIsExpired(true);
-                        if (onExpire) onExpire();
-                    }
-                } else {
-                    const hours = Math.floor(diff / (1000 * 60 * 60));
-                    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-                    setTimeLeft(`${hours > 0 ? hours + 'h ' : ''}${minutes}m ${seconds}s`);
-                    setIsExpired(false);
+                    if (onExpire) onExpire();
+                    return;
                 }
-            } catch (e) {
-                setTimeLeft('--:--');
+                
+                setIsClosed(false);
+                
+                const diffMs = closeDateTime.getTime() - now.getTime();
+                const diffMins = Math.floor(diffMs / 60000);
+                const hours = Math.floor(diffMins / 60);
+                const mins = diffMins % 60;
+                
+                if (hours > 0) {
+                    setTimeLeft(`${hours}h ${mins}m`);
+                } else {
+                    setTimeLeft(`${mins}m`);
+                }
+            } catch (error) {
+                console.error('Timer error:', error);
+                setTimeLeft('ERROR');
             }
         };
-
-        const interval = setInterval(calculate, 1000);
-        calculate();
+        
+        calculateTimeLeft();
+        const interval = setInterval(calculateTimeLeft, 60000);
+        
         return () => clearInterval(interval);
-    }, [drawDate, drawTime, isExpired, onExpire]);
-
-    return (
-        <span className={`font-mono ${isExpired ? 'text-rose-500' : 'text-emerald-400 font-bold'}`}>
-            {timeLeft}
-        </span>
-    );
-};
-
-export default Timer;
+    }, [drawTime, drawDate, onExpire]);
+    
+    if (isClosed) {
+        return <span className="text-red-500 font-bold text-xs">🔒 CERRADO</span>;
+    }
+    
+    return <span className="text-emerald-400 font-mono text-xs">⏱️ {timeLeft}</span>;
+}
