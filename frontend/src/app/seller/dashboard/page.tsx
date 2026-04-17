@@ -14,6 +14,15 @@ interface Draw {
     is_open: boolean;
 }
 
+// Función para convertir hora 24h a formato AM/PM
+const formatTo12Hour = (time24: string): string => {
+    const [hour, minute] = time24.split(':').map(Number);
+    const period = hour >= 12 ? 'PM' : 'AM';
+    let hour12 = hour % 12;
+    if (hour12 === 0) hour12 = 12;
+    return `${hour12}:${minute.toString().padStart(2, '0')} ${period}`;
+};
+
 const getCostaRicaDate = (): string => {
     const now = new Date();
     const costaRicaOffset = -6 * 60 * 60 * 1000;
@@ -154,7 +163,7 @@ export default function SellerDashboard() {
                                     onClick={() => draw.is_open && setSelectedDraw(draw)}
                                     className={`p-5 rounded-3xl border-2 transition-all text-left relative ${!draw.is_open ? 'opacity-20 grayscale cursor-not-allowed border-transparent' : selectedDraw?.id === draw.id ? 'bg-emerald-500/20 border-emerald-500' : 'bg-[#1e293b] border-transparent'}`}
                                 >
-                                    <p className="text-xl font-black italic">{draw.draw_time}</p>
+                                    <p className="text-xl font-black italic">{formatTo12Hour(draw.draw_time)}</p>
                                     <div className="mt-2 text-[10px] font-black">
                                         <Timer drawTime={draw.draw_time} drawDate={draw.draw_date} isOpen={draw.is_open} />
                                     </div>
@@ -222,7 +231,7 @@ export default function SellerDashboard() {
                             <p className="text-[10px] font-bold">COMPROBANTE DE VENTA</p>
                         </div>
                         <div className="space-y-1 text-xs mb-4">
-                            <p className="font-black uppercase">{showTicket.loteria_type} - {showTicket.draw_time}</p>
+                            <p className="font-black uppercase">{showTicket.loteria_type} - {formatTo12Hour(showTicket.draw_time)}</p>
                             <p className="text-[10px]">{new Date(showTicket.draw_date).toLocaleDateString()}</p>
                             <p className="text-[10px] pt-1">Cliente: Jugador en efectivo</p>
                         </div>
