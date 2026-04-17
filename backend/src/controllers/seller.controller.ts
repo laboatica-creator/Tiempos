@@ -21,20 +21,45 @@ const getSellerIdFromToken = (req: AuthRequest): string | null => {
     return null;
 };
 
-// Obtener sorteos activos
+// Obtener sorteos activos - CORREGIDO CON FILTROS
 export const getActiveDraws = async (req: AuthRequest, res: Response) => {
     try {
-        const result = await pool.query(`
+        const { type, date } = req.query;
+        
+        console.log('📅 getActiveDraws - type:', type, 'date:', date);
+        
+        let query = `
             SELECT 
-                d.*,
+                d.id,
+                d.lottery_type,
+                TO_CHAR(d.draw_date, 'YYYY-MM-DD') as draw_date,
+                d.draw_time,
                 CASE 
                     WHEN NOW() AT TIME ZONE 'America/Costa_Rica' >= (d.draw_date + d.draw_time) - INTERVAL '20 minutes' THEN false 
                     ELSE true 
                 END as is_open
             FROM draws d
             WHERE d.draw_date >= CURRENT_DATE
-            ORDER BY d.draw_date, d.draw_time
-        `);
+        `;
+        
+        const params: any[] = [];
+        
+        if (type) {
+            query += ` AND d.lottery_type = $${params.length + 1}`;
+            params.push(type);
+        }
+        
+        if (date) {
+            query += ` AND d.draw_date = $${params.length + 1}`;
+            params.push(date);
+        }
+        
+        query += ` ORDER BY d.draw_date, d.draw_time`;
+        
+        const result = await pool.query(query, params);
+        
+        console.log(`✅ Sorteos encontrados: ${result.rows.length} para type=${type}, date=${date}`);
+        
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching draws:', error);
