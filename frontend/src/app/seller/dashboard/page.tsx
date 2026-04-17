@@ -5,43 +5,19 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import Logo from '@/components/Logo';
 import Timer from '@/components/Timer';
+import { formatTo12Hour, isDrawOpen, getLocalDate, getLocalDateWithOffset } from '@/lib/drawUtils';
 
 interface Draw {
     id: string;
     lottery_type: string;
     draw_date: string;
     draw_time: string;
-    is_open: boolean;
 }
-
-// Función para convertir hora 24h a formato AM/PM
-const formatTo12Hour = (time24: string): string => {
-    const [hour, minute] = time24.split(':').map(Number);
-    const period = hour >= 12 ? 'PM' : 'AM';
-    let hour12 = hour % 12;
-    if (hour12 === 0) hour12 = 12;
-    return `${hour12}:${minute.toString().padStart(2, '0')} ${period}`;
-};
-
-const getCostaRicaDate = (): string => {
-    const now = new Date();
-    const costaRicaOffset = -6 * 60 * 60 * 1000;
-    const costaRicaTime = new Date(now.getTime() + costaRicaOffset);
-    return costaRicaTime.toISOString().split('T')[0];
-};
-
-const getDateWithOffset = (daysToAdd: number): string => {
-    const now = new Date();
-    const costaRicaOffset = -6 * 60 * 60 * 1000;
-    const costaRicaTime = new Date(now.getTime() + costaRicaOffset);
-    costaRicaTime.setDate(costaRicaTime.getDate() + daysToAdd);
-    return costaRicaTime.toISOString().split('T')[0];
-};
 
 export default function SellerDashboard() {
     const [selectedType, setSelectedType] = useState<'TICA' | 'NICA' | null>(null);
     const [draws, setDraws] = useState<Draw[]>([]);
-    const [selectedDate, setSelectedDate] = useState<string>(getCostaRicaDate());
+    const [selectedDate, setSelectedDate] = useState<string>(getLocalDate());
     const [selectedDraw, setSelectedDraw] = useState<Draw | null>(null);
     const [selectedNumbers, setSelectedNumbers] = useState<Set<string>>(new Set());
     const [selectedAmount, setSelectedAmount] = useState<number>(500);
@@ -52,7 +28,7 @@ export default function SellerDashboard() {
     const router = useRouter();
 
     const dateTabs = Array.from({ length: 8 }, (_, i) => {
-        const dateStr = getDateWithOffset(i);
+        const dateStr = getLocalDateWithOffset(i);
         return { 
             iso: dateStr, 
             label: i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : new Date(dateStr).toLocaleDateString('es-CR', { weekday: 'short', day: 'numeric' }) 
@@ -82,7 +58,12 @@ export default function SellerDashboard() {
 
     const handleRegister = async () => {
         if (!selectedDraw || selectedNumbers.size === 0) return;
-        if (!selectedDraw.is_open) return alert('Este sorteo ya cerró.');
+        
+        // Verificar si sigue abierto usando hora local
+        if (!isDrawOpen(selectedDraw.draw_date, selectedDraw.draw_time)) {
+            alert('Este sorteo ya cerró.');
+            return;
+        }
 
         setSubmitting(true);
         try {
@@ -157,23 +138,26 @@ export default function SellerDashboard() {
                         {draws.length === 0 ? (
                             <div className="col-span-4 text-center py-10 text-gray-500">No hay sorteos disponibles para esta fecha</div>
                         ) : (
-                            draws.map(draw => (
-                                <button
-                                    key={draw.id}
-                                    onClick={() => draw.is_open && setSelectedDraw(draw)}
-                                    className={`p-5 rounded-3xl border-2 transition-all text-left relative ${!draw.is_open ? 'opacity-20 grayscale cursor-not-allowed border-transparent' : selectedDraw?.id === draw.id ? 'bg-emerald-500/20 border-emerald-500' : 'bg-[#1e293b] border-transparent'}`}
-                                >
-                                    <p className="text-xl font-black italic">{formatTo12Hour(draw.draw_time)}</p>
-                                    <div className="mt-2 text-[10px] font-black">
-                                        <Timer drawTime={draw.draw_time} drawDate={draw.draw_date} isOpen={draw.is_open} />
-                                    </div>
-                                    {!draw.is_open && <p className="text-[8px] text-rose-500 font-bold uppercase mt-1">Cerrado</p>}
-                                </button>
-                            ))
+                            draws.map(draw => {
+                                const isOpen = isDrawOpen(draw.draw_date, draw.draw_time);
+                                return (
+                                    <button
+                                        key={draw.id}
+                                        onClick={() => isOpen && setSelectedDraw(draw)}
+                                        className={`p-5 rounded-3xl border-2 transition-all text-left relative ${!isOpen ? 'opacity-20 grayscale cursor-not-allowed border-transparent' : selectedDraw?.id === draw.id ? 'bg-emerald-500/20 border-emerald-500' : 'bg-[#1e293b] border-transparent'}`}
+                                    >
+                                        <p className="text-xl font-black italic">{formatTo12Hour(draw.draw_time)}</p>
+                                        <div className="mt-2 text-[10px] font-black">
+                                            <Timer drawTime={draw.draw_time} drawDate={draw.draw_date} isOpen={isOpen} />
+                                        </div>
+                                        {!isOpen && <p className="text-[8px] text-rose-500 font-bold uppercase mt-1">Cerrado</p>}
+                                    </button>
+                                );
+                            })
                         )}
                     </div>
 
-                    {selectedDraw && (
+                    {selectedDraw && isDrawOpen(selectedDraw.draw_date, selectedDraw.draw_time) && (
                         <div className="bg-[#1e293b] p-6 rounded-[3rem] border border-white/5">
                             <h3 className="text-[10px] font-black text-gray-500 uppercase text-center mb-6 tracking-widest">Seleccione Números</h3>
                             <div className="grid grid-cols-7 gap-2">
@@ -208,7 +192,7 @@ export default function SellerDashboard() {
                             <input type="number" placeholder="Monto Manual" value={customAmount} onChange={e=>setCustomAmount(e.target.value)} className="w-full bg-black/40 border-2 border-white/5 rounded-2xl p-4 text-center font-black outline-none focus:border-emerald-500" />
                         </div>
 
-                        {selectedNumbers.size > 0 && selectedDraw && selectedDraw.is_open && (
+                        {selectedNumbers.size > 0 && selectedDraw && isDrawOpen(selectedDraw.draw_date, selectedDraw.draw_time) && (
                             <div className="space-y-4 pt-6 border-t border-white/10">
                                 <div className="flex justify-between items-end">
                                     <p className="text-[10px] font-black text-gray-500 uppercase">Total a Cobrar</p>
