@@ -21,20 +21,35 @@ const getSellerIdFromToken = (req: AuthRequest): string | null => {
     return null;
 };
 
-// Obtener sorteos activos - CORREGIDO VERSIÓN FINAL
+// Función para obtener fecha actual en Costa Rica (sin desfase)
+const getCostaRicaDate = (): string => {
+    // Método CORRECTO para obtener fecha en Costa Rica
+    const now = new Date();
+    const offset = 6 * 60 * 60 * 1000; // Costa Rica UTC-6
+    const costaRicaTime = new Date(now.getTime() - offset);
+    return costaRicaTime.toISOString().split('T')[0];
+};
+
+const getCostaRicaNow = (): Date => {
+    const now = new Date();
+    const offset = 6 * 60 * 60 * 1000; // Costa Rica UTC-6
+    return new Date(now.getTime() - offset);
+};
+
+// Obtener sorteos activos - CORREGIDO DEFINITIVO
 export const getActiveDraws = async (req: AuthRequest, res: Response) => {
     try {
         const { type, date } = req.query;
         
-        // Obtener fecha actual en Costa Rica (YYYY-MM-DD)
-        const costaRicaNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Costa_Rica' }));
-        const todayCostaRica = costaRicaNow.toISOString().split('T')[0];
+        // Obtener fecha actual en Costa Rica - CORREGIDO
+        const todayCostaRica = getCostaRicaDate();
+        const costaRicaNow = getCostaRicaNow();
         
         console.log('📅 getActiveDraws - type:', type, 'date:', date);
-        console.log('📅 Hoy Costa Rica:', todayCostaRica);
-        console.log('📅 Hora actual Costa Rica:', costaRicaNow.toLocaleString('es-CR', { timeZone: 'America/Costa_Rica' }));
+        console.log('📅 Hoy Costa Rica (fecha):', todayCostaRica);
+        console.log('📅 Hoy Costa Rica (completo):', costaRicaNow.toISOString());
         
-        // CORRECCIÓN: Construir timestamp correctamente con timezone
+        // Query CORREGIDA - usar TIMESTAMP con zona horaria explícita
         let query = `
             SELECT 
                 d.id,
@@ -42,7 +57,7 @@ export const getActiveDraws = async (req: AuthRequest, res: Response) => {
                 TO_CHAR(d.draw_date, 'YYYY-MM-DD') as draw_date,
                 d.draw_time,
                 -- Calcular si está abierto (true = se puede apostar)
-                -- Está abierto si: ahora + 20 minutos < hora del sorteo
+                -- Está abierto si: hora actual + 20 minutos < hora del sorteo
                 CASE 
                     WHEN (NOW() AT TIME ZONE 'America/Costa_Rica' + INTERVAL '20 minutes') < 
                          (d.draw_date + d.draw_time) AT TIME ZONE 'America/Costa_Rica'
@@ -56,6 +71,7 @@ export const getActiveDraws = async (req: AuthRequest, res: Response) => {
                 ) as closing_time
             FROM draws d
             WHERE d.draw_date >= $1::DATE
+            AND d.draw_date <= $1::DATE + INTERVAL '7 days'
         `;
         
         const params: any[] = [todayCostaRica];
@@ -76,7 +92,7 @@ export const getActiveDraws = async (req: AuthRequest, res: Response) => {
         
         console.log(`✅ Sorteos encontrados: ${result.rows.length}`);
         result.rows.forEach(row => {
-            console.log(`   - ${row.draw_date} ${row.draw_time}: is_open=${row.is_open}`);
+            console.log(`   - ${row.draw_date} ${row.draw_time}: is_open=${row.is_open}, cierra=${row.closing_time}`);
         });
         
         res.json(result.rows);
@@ -86,7 +102,7 @@ export const getActiveDraws = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Registrar apuesta en efectivo (vendedor)
+// El resto del archivo permanece igual...
 export const createCashBet = async (req: AuthRequest, res: Response) => {
     const sellerId = getSellerIdFromToken(req);
     const { items, draw_id, loteria_type, total_amount } = req.body;
@@ -184,7 +200,6 @@ export const createCashBet = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Obtener ventas del día del vendedor
 export const getTodaySales = async (req: AuthRequest, res: Response) => {
     const sellerId = getSellerIdFromToken(req);
     
@@ -227,7 +242,6 @@ export const getTodaySales = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Obtener historial de ventas
 export const getSalesHistory = async (req: AuthRequest, res: Response) => {
     const sellerId = getSellerIdFromToken(req);
     const { start_date, end_date } = req.query;
@@ -273,7 +287,6 @@ export const getSalesHistory = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Obtener datos del ticket
 export const getTicketData = async (req: AuthRequest, res: Response) => {
     const { betId } = req.params;
     const sellerId = getSellerIdFromToken(req);
