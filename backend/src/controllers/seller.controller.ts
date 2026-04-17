@@ -21,12 +21,17 @@ const getSellerIdFromToken = (req: AuthRequest): string | null => {
     return null;
 };
 
-// Obtener sorteos activos - CORREGIDO CON FILTROS
+// Obtener sorteos activos - CORREGIDO CON ZONA HORARIA
 export const getActiveDraws = async (req: AuthRequest, res: Response) => {
     try {
         const { type, date } = req.query;
         
+        // Obtener fecha actual en Costa Rica
+        const costaRicaNow = new Date().toLocaleString('en-US', { timeZone: 'America/Costa_Rica' });
+        const costaRicaDate = new Date(costaRicaNow).toISOString().split('T')[0];
+        
         console.log('📅 getActiveDraws - type:', type, 'date:', date);
+        console.log('📅 Fecha actual Costa Rica:', costaRicaDate);
         
         let query = `
             SELECT 
@@ -39,10 +44,10 @@ export const getActiveDraws = async (req: AuthRequest, res: Response) => {
                     ELSE true 
                 END as is_open
             FROM draws d
-            WHERE d.draw_date >= CURRENT_DATE
+            WHERE d.draw_date >= $1::DATE
         `;
         
-        const params: any[] = [];
+        const params: any[] = [costaRicaDate];
         
         if (type) {
             query += ` AND d.lottery_type = $${params.length + 1}`;
@@ -50,7 +55,7 @@ export const getActiveDraws = async (req: AuthRequest, res: Response) => {
         }
         
         if (date) {
-            query += ` AND d.draw_date = $${params.length + 1}`;
+            query += ` AND d.draw_date = $${params.length + 1}::DATE`;
             params.push(date);
         }
         
@@ -58,7 +63,7 @@ export const getActiveDraws = async (req: AuthRequest, res: Response) => {
         
         const result = await pool.query(query, params);
         
-        console.log(`✅ Sorteos encontrados: ${result.rows.length} para type=${type}, date=${date}`);
+        console.log(`✅ Sorteos encontrados: ${result.rows.length} para type=${type}, date=${date || costaRicaDate}`);
         
         res.json(result.rows);
     } catch (error) {
