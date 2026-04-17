@@ -14,15 +14,13 @@ interface Draw {
     is_open: boolean;
 }
 
-// Función para obtener fecha Costa Rica
 const getCostaRicaDate = (): string => {
     const now = new Date();
-    const costaRicaOffset = -6 * 60 * 60 * 1000; // UTC-6
+    const costaRicaOffset = -6 * 60 * 60 * 1000;
     const costaRicaTime = new Date(now.getTime() + costaRicaOffset);
     return costaRicaTime.toISOString().split('T')[0];
 };
 
-// Función para obtener fecha con offset para los tabs
 const getDateWithOffset = (daysToAdd: number): string => {
     const now = new Date();
     const costaRicaOffset = -6 * 60 * 60 * 1000;
@@ -34,7 +32,6 @@ const getDateWithOffset = (daysToAdd: number): string => {
 export default function SellerDashboard() {
     const [selectedType, setSelectedType] = useState<'TICA' | 'NICA' | null>(null);
     const [draws, setDraws] = useState<Draw[]>([]);
-    const [closedDraws, setClosedDraws] = useState<Record<string, boolean>>({});
     const [selectedDate, setSelectedDate] = useState<string>(getCostaRicaDate());
     const [selectedDraw, setSelectedDraw] = useState<Draw | null>(null);
     const [selectedNumbers, setSelectedNumbers] = useState<Set<string>>(new Set());
@@ -45,7 +42,6 @@ export default function SellerDashboard() {
     
     const router = useRouter();
 
-    // Generar tabs de fechas CORREGIDOS
     const dateTabs = Array.from({ length: 8 }, (_, i) => {
         const dateStr = getDateWithOffset(i);
         return { 
@@ -64,31 +60,25 @@ export default function SellerDashboard() {
         try {
             const token = sessionStorage.getItem('token');
             const url = `/seller/draws?type=${selectedType}&date=${selectedDate}`;
-            console.log('🔍 Fetching draws:', url);
-            console.log('📅 Fecha consultada:', selectedDate);
             const data = await api.get(url, token);
-            console.log('📦 Draws recibidos:', data);
             if (Array.isArray(data)) {
                 setDraws(data);
             } else {
-                console.error('❌ Error: data no es array', data);
                 setDraws([]);
             }
         } catch (err) { 
-            console.error('❌ Error fetching draws:', err); 
+            console.error('Error fetching draws:', err); 
         }
     };
 
     const handleRegister = async () => {
         if (!selectedDraw || selectedNumbers.size === 0) return;
-        if (closedDraws[selectedDraw.id]) return alert('Este sorteo ya cerró.');
+        if (!selectedDraw.is_open) return alert('Este sorteo ya cerró.');
 
         setSubmitting(true);
         try {
             const token = sessionStorage.getItem('token');
             const amount = customAmount ? parseInt(customAmount) : selectedAmount;
-            
-            // Calcular total
             const total_amount = amount * selectedNumbers.size;
             
             const response = await api.post('/seller/cash-bet', {
@@ -98,44 +88,34 @@ export default function SellerDashboard() {
                 total_amount: total_amount
             }, token);
 
-            console.log('📝 Respuesta registro:', response);
-
             if (response.success) {
                 const ticket = await api.get(`/seller/ticket/${response.bet_id}`, token);
                 setShowTicket(ticket);
                 setSelectedNumbers(new Set());
                 setSelectedDraw(null);
                 alert('✅ Apuesta registrada exitosamente');
-                fetchDraws(); // Recargar sorteos
+                fetchDraws();
             } else {
                 alert(response.error || 'Error al registrar');
             }
         } catch (err: any) { 
-            console.error('❌ Error en registro:', err);
             alert(err.message || 'Fallo de red'); 
         } finally { 
             setSubmitting(false); 
         }
     };
 
-    // VISTA INICIAL: SOLO DOS BOTONES GRANDES
     if (!selectedType) {
         return (
             <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center p-6 bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a]">
                 <Logo size="text-4xl" className="mb-12" />
                 <h1 className="text-white font-black text-2xl uppercase tracking-tighter mb-8 italic">Seleccione Lotería</h1>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl">
-                    <button 
-                        onClick={() => setSelectedType('TICA')}
-                        className="aspect-square md:aspect-auto md:h-64 bg-[#1e293b] rounded-[3rem] border-4 border-blue-500/20 hover:border-blue-500 flex flex-col items-center justify-center gap-4 transition-all hover:scale-105 group shadow-2xl"
-                    >
+                    <button onClick={() => setSelectedType('TICA')} className="aspect-square md:aspect-auto md:h-64 bg-[#1e293b] rounded-[3rem] border-4 border-blue-500/20 hover:border-blue-500 flex flex-col items-center justify-center gap-4 transition-all hover:scale-105 group shadow-2xl">
                         <span className="text-8xl group-hover:scale-110 transition-transform">🇨🇷</span>
                         <span className="text-blue-400 font-black text-4xl italic uppercase">TICA</span>
                     </button>
-                    <button 
-                        onClick={() => setSelectedType('NICA')}
-                        className="aspect-square md:aspect-auto md:h-64 bg-[#1e293b] rounded-[3rem] border-4 border-rose-500/20 hover:border-rose-500 flex flex-col items-center justify-center gap-4 transition-all hover:scale-105 group shadow-2xl"
-                    >
+                    <button onClick={() => setSelectedType('NICA')} className="aspect-square md:aspect-auto md:h-64 bg-[#1e293b] rounded-[3rem] border-4 border-rose-500/20 hover:border-rose-500 flex flex-col items-center justify-center gap-4 transition-all hover:scale-105 group shadow-2xl">
                         <span className="text-8xl group-hover:scale-110 transition-transform">🇳🇮</span>
                         <span className="text-rose-500 font-black text-4xl italic uppercase">NICA</span>
                     </button>
@@ -145,7 +125,6 @@ export default function SellerDashboard() {
         );
     }
 
-    // VISTA DE TERMINAL
     return (
         <div className="min-h-screen bg-[#0f172a] text-white p-4">
             <header className="flex justify-between items-center mb-6 bg-[#1e293b] p-4 rounded-3xl border border-white/5">
@@ -159,40 +138,32 @@ export default function SellerDashboard() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
-                    {/* Pestañas de Fechas */}
                     <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                         {dateTabs.map(tab => (
                             <button key={tab.iso} onClick={() => setSelectedDate(tab.iso)} className={`px-6 py-3 rounded-2xl whitespace-nowrap text-[10px] font-black uppercase transition-all ${selectedDate === tab.iso ? 'bg-white text-black' : 'bg-white/5 text-gray-400'}`}>{tab.label}</button>
                         ))}
                     </div>
 
-                    {/* Sorteos con Timer y Bloqueo */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {draws.length === 0 ? (
-                            <div className="col-span-4 text-center py-10 text-gray-500">
-                                No hay sorteos disponibles para esta fecha
-                            </div>
+                            <div className="col-span-4 text-center py-10 text-gray-500">No hay sorteos disponibles para esta fecha</div>
                         ) : (
-                            draws.map(draw => {
-                                const isClosed = closedDraws[draw.id] || !draw.is_open;
-                                return (
-                                    <button
-                                        key={draw.id}
-                                        onClick={() => !isClosed && setSelectedDraw(draw)}
-                                        className={`p-5 rounded-3xl border-2 transition-all text-left relative ${isClosed ? 'opacity-20 grayscale cursor-not-allowed border-transparent' : selectedDraw?.id === draw.id ? 'bg-emerald-500/20 border-emerald-500' : 'bg-[#1e293b] border-transparent'}`}
-                                    >
-                                        <p className="text-xl font-black italic">{draw.draw_time}</p>
-                                        <div className="mt-2 text-[10px] font-black">
-                                            <Timer drawTime={draw.draw_time} drawDate={draw.draw_date} onExpire={() => setClosedDraws(prev => ({...prev, [draw.id]: true}))} />
-                                        </div>
-                                        {isClosed && <p className="text-[8px] text-rose-500 font-bold uppercase mt-1">Cerrado</p>}
-                                    </button>
-                                );
-                            })
+                            draws.map(draw => (
+                                <button
+                                    key={draw.id}
+                                    onClick={() => draw.is_open && setSelectedDraw(draw)}
+                                    className={`p-5 rounded-3xl border-2 transition-all text-left relative ${!draw.is_open ? 'opacity-20 grayscale cursor-not-allowed border-transparent' : selectedDraw?.id === draw.id ? 'bg-emerald-500/20 border-emerald-500' : 'bg-[#1e293b] border-transparent'}`}
+                                >
+                                    <p className="text-xl font-black italic">{draw.draw_time}</p>
+                                    <div className="mt-2 text-[10px] font-black">
+                                        <Timer drawTime={draw.draw_time} drawDate={draw.draw_date} isOpen={draw.is_open} />
+                                    </div>
+                                    {!draw.is_open && <p className="text-[8px] text-rose-500 font-bold uppercase mt-1">Cerrado</p>}
+                                </button>
+                            ))
                         )}
                     </div>
 
-                    {/* Grid de 100 Números (00-99) */}
                     {selectedDraw && (
                         <div className="bg-[#1e293b] p-6 rounded-[3rem] border border-white/5">
                             <h3 className="text-[10px] font-black text-gray-500 uppercase text-center mb-6 tracking-widest">Seleccione Números</h3>
@@ -201,15 +172,11 @@ export default function SellerDashboard() {
                                     const num = i.toString().padStart(2, '0');
                                     const isSelected = selectedNumbers.has(num);
                                     return (
-                                        <button 
-                                            key={num} 
-                                            onClick={() => {
-                                                const news = new Set(selectedNumbers);
-                                                if (news.has(num)) news.delete(num); else news.add(num);
-                                                setSelectedNumbers(news);
-                                            }}
-                                            className={`aspect-square flex items-center justify-center rounded-2xl font-black text-lg transition-all border-2 ${isSelected ? 'bg-emerald-500 border-emerald-400 text-black scale-95' : 'bg-[#0f172a] border-transparent text-gray-500'}`}
-                                        >
+                                        <button key={num} onClick={() => {
+                                            const news = new Set(selectedNumbers);
+                                            if (news.has(num)) news.delete(num); else news.add(num);
+                                            setSelectedNumbers(news);
+                                        }} className={`aspect-square flex items-center justify-center rounded-2xl font-black text-lg transition-all border-2 ${isSelected ? 'bg-emerald-500 border-emerald-400 text-black scale-95' : 'bg-[#0f172a] border-transparent text-gray-500'}`}>
                                             {num}
                                         </button>
                                     );
@@ -219,11 +186,9 @@ export default function SellerDashboard() {
                     )}
                 </div>
 
-                {/* Panel Derecho de Pago */}
                 <div className="space-y-6">
                     <div className="bg-[#1e293b] p-8 rounded-[3rem] border border-white/5 flex flex-col gap-6">
                         <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Resumen de Venta</h3>
-                        
                         <div className="space-y-4">
                             <p className="text-[10px] font-black text-gray-500 uppercase text-center">Monto por Número</p>
                             <div className="grid grid-cols-2 gap-2">
@@ -234,27 +199,21 @@ export default function SellerDashboard() {
                             <input type="number" placeholder="Monto Manual" value={customAmount} onChange={e=>setCustomAmount(e.target.value)} className="w-full bg-black/40 border-2 border-white/5 rounded-2xl p-4 text-center font-black outline-none focus:border-emerald-500" />
                         </div>
 
-                        {selectedNumbers.size > 0 && selectedDraw && (
-                            <div className="space-y-4 pt-6 border-t border-white/10 animate-in fade-in slide-in-from-bottom-5">
+                        {selectedNumbers.size > 0 && selectedDraw && selectedDraw.is_open && (
+                            <div className="space-y-4 pt-6 border-t border-white/10">
                                 <div className="flex justify-between items-end">
                                     <p className="text-[10px] font-black text-gray-500 uppercase">Total a Cobrar</p>
-                                    <p className="text-4xl font-black italic">₡{( (customAmount ? parseInt(customAmount) : selectedAmount ) * selectedNumbers.size ).toLocaleString()}</p>
+                                    <p className="text-4xl font-black italic">₡{((customAmount ? parseInt(customAmount) : selectedAmount) * selectedNumbers.size).toLocaleString()}</p>
                                 </div>
-                                <button 
-                                    onClick={handleRegister}
-                                    disabled={submitting}
-                                    className="w-full py-6 bg-gradient-to-r from-blue-600 to-emerald-600 rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all text-black"
-                                >
+                                <button onClick={handleRegister} disabled={submitting} className="w-full py-6 bg-gradient-to-r from-blue-600 to-emerald-600 rounded-3xl font-black text-sm uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all text-black">
                                     {submitting ? 'GUARDANDO...' : '💰 REGISTRAR VENTA'}
                                 </button>
-                                <p className="text-[9px] text-gray-500 text-center font-bold">REGISTRO COMO: JUGADOR EN EFECTIVO</p>
                             </div>
                         )}
                     </div>
                 </div>
             </div>
 
-            {/* MODAL DE TICKET */}
             {showTicket && (
                 <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4">
                     <div className="bg-white text-black p-8 rounded-[2rem] w-full max-w-[340px] font-mono shadow-2xl">
