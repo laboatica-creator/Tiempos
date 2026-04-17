@@ -22,8 +22,7 @@ const getSellerIdFromToken = (req: AuthRequest): string | null => {
 
 const getCostaRicaDate = (): string => {
     const now = new Date();
-    const offset = 6 * 60 * 60 * 1000;
-    const costaRicaTime = new Date(now.getTime() - offset);
+    const costaRicaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Costa_Rica' }));
     return costaRicaTime.toISOString().split('T')[0];
 };
 
@@ -33,7 +32,7 @@ export const getActiveDraws = async (req: AuthRequest, res: Response) => {
         const todayCostaRica = getCostaRicaDate();
         
         console.log('📅 getActiveDraws - type:', type, 'date:', date);
-        console.log('📅 Hoy Costa Rica:', todayCostaRica);
+        console.log('📅 Hoy Costa Rica (calculado):', todayCostaRica);
         
         let query = `
             SELECT 
@@ -106,20 +105,22 @@ export const createCashBet = async (req: AuthRequest, res: Response) => {
     }
     
     try {
+        const todayCostaRica = getCostaRicaDate();
+        
         const drawCheck = await pool.query(`
             SELECT 
                 id,
                 draw_date,
                 CASE 
-                    WHEN draw_date > CURRENT_DATE THEN true
-                    WHEN draw_date = CURRENT_DATE AND 
+                    WHEN draw_date > $1::DATE THEN true
+                    WHEN draw_date = $1::DATE AND 
                          (NOW() AT TIME ZONE 'America/Costa_Rica' + INTERVAL '20 minutes') < 
                          (draw_date + draw_time) AT TIME ZONE 'America/Costa_Rica'
                     THEN true 
                     ELSE false 
                 END as is_open
-            FROM draws WHERE id = $1
-        `, [draw_id]);
+            FROM draws WHERE id = $2
+        `, [todayCostaRica, draw_id]);
         
         if (drawCheck.rows.length === 0) {
             return res.status(404).json({ error: 'Sorteo no encontrado' });
