@@ -13,7 +13,9 @@ export default function Timer({ drawTime, drawDate, isOpen, onExpire }: TimerPro
     const [timeLeft, setTimeLeft] = useState<string>('');
 
     useEffect(() => {
+        // Si el backend dice que está cerrado, mostrar CERRADO inmediatamente
         if (!isOpen) {
+            setTimeLeft('');
             if (onExpire) onExpire();
             return;
         }
@@ -38,7 +40,6 @@ export default function Timer({ drawTime, drawDate, isOpen, onExpire }: TimerPro
                     return;
                 }
                 
-                // Calcular días, horas, minutos, segundos
                 const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
                 const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                 const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
@@ -69,7 +70,7 @@ export default function Timer({ drawTime, drawDate, isOpen, onExpire }: TimerPro
     }
     
     if (!timeLeft) {
-        return <span className="text-emerald-400 font-mono text-xs">⏱️ Calculando...</span>;
+        return <span className="text-emerald-400 font-mono text-xs">⏱️ --</span>;
     }
     
     return <span className="text-emerald-400 font-mono text-xs">⏱️ {timeLeft}</span>;
