@@ -23,7 +23,6 @@ const getSellerIdFromToken = (req: AuthRequest): string | null => {
 
 // Función para obtener fecha actual en Costa Rica (sin desfase)
 const getCostaRicaDate = (): string => {
-    // Método CORRECTO para obtener fecha en Costa Rica
     const now = new Date();
     const offset = 6 * 60 * 60 * 1000; // Costa Rica UTC-6
     const costaRicaTime = new Date(now.getTime() - offset);
@@ -36,12 +35,11 @@ const getCostaRicaNow = (): Date => {
     return new Date(now.getTime() - offset);
 };
 
-// Obtener sorteos activos - CORREGIDO DEFINITIVO
+// Obtener sorteos activos - CORREGIDO para días futuros
 export const getActiveDraws = async (req: AuthRequest, res: Response) => {
     try {
         const { type, date } = req.query;
         
-        // Obtener fecha actual en Costa Rica - CORREGIDO
         const todayCostaRica = getCostaRicaDate();
         const costaRicaNow = getCostaRicaNow();
         
@@ -49,22 +47,21 @@ export const getActiveDraws = async (req: AuthRequest, res: Response) => {
         console.log('📅 Hoy Costa Rica (fecha):', todayCostaRica);
         console.log('📅 Hoy Costa Rica (completo):', costaRicaNow.toISOString());
         
-        // Query CORREGIDA - usar TIMESTAMP con zona horaria explícita
         let query = `
             SELECT 
                 d.id,
                 d.lottery_type,
                 TO_CHAR(d.draw_date, 'YYYY-MM-DD') as draw_date,
                 d.draw_time,
-                -- Calcular si está abierto (true = se puede apostar)
-                -- Está abierto si: hora actual + 20 minutos < hora del sorteo
                 CASE 
-                    WHEN (NOW() AT TIME ZONE 'America/Costa_Rica' + INTERVAL '20 minutes') < 
+                    WHEN d.draw_date > CURRENT_DATE THEN true
+                    WHEN d.draw_date < CURRENT_DATE THEN false
+                    WHEN d.draw_date = CURRENT_DATE AND 
+                         (NOW() AT TIME ZONE 'America/Costa_Rica' + INTERVAL '20 minutes') < 
                          (d.draw_date + d.draw_time) AT TIME ZONE 'America/Costa_Rica'
                     THEN true 
                     ELSE false 
                 END as is_open,
-                -- Calcular hora de cierre (20 minutos antes)
                 TO_CHAR(
                     (d.draw_date + d.draw_time) AT TIME ZONE 'America/Costa_Rica' - INTERVAL '20 minutes',
                     'HH24:MI:SS'
@@ -102,7 +99,7 @@ export const getActiveDraws = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// El resto del archivo permanece igual...
+// Registrar apuesta en efectivo (vendedor)
 export const createCashBet = async (req: AuthRequest, res: Response) => {
     const sellerId = getSellerIdFromToken(req);
     const { items, draw_id, loteria_type, total_amount } = req.body;
@@ -127,12 +124,16 @@ export const createCashBet = async (req: AuthRequest, res: Response) => {
     }
     
     try {
-        // Verificar si el sorteo está abierto (CORREGIDO)
+        // Verificar si el sorteo está abierto - CORREGIDO
         const drawCheck = await pool.query(`
             SELECT 
                 id,
+                draw_date,
                 CASE 
-                    WHEN (NOW() AT TIME ZONE 'America/Costa_Rica' + INTERVAL '20 minutes') < 
+                    WHEN draw_date > CURRENT_DATE THEN true
+                    WHEN draw_date < CURRENT_DATE THEN false
+                    WHEN draw_date = CURRENT_DATE AND 
+                         (NOW() AT TIME ZONE 'America/Costa_Rica' + INTERVAL '20 minutes') < 
                          (draw_date + draw_time) AT TIME ZONE 'America/Costa_Rica'
                     THEN true 
                     ELSE false 
@@ -165,7 +166,6 @@ export const createCashBet = async (req: AuthRequest, res: Response) => {
             userId = genericUser.rows[0].id;
         }
         
-        // Insertar cabecera de la apuesta
         const betResult = await pool.query(
             `INSERT INTO bets (user_id, seller_id, draw_id, total_amount, payment_method, loteria_type, status, created_at)
              VALUES ($1, $2, $3, $4, 'cash', $5, 'active', NOW() AT TIME ZONE 'America/Costa_Rica')
@@ -175,7 +175,6 @@ export const createCashBet = async (req: AuthRequest, res: Response) => {
         
         const betId = betResult.rows[0].id;
         
-        // Insertar cada ítem (número) en bet_items
         for (const item of items) {
             await pool.query(
                 `INSERT INTO bet_items (bet_id, number, amount, status, created_at)
