@@ -14,11 +14,28 @@ interface Draw {
     is_open: boolean;
 }
 
+// Función para obtener fecha Costa Rica
+const getCostaRicaDate = (): string => {
+    const now = new Date();
+    const costaRicaOffset = -6 * 60 * 60 * 1000; // UTC-6
+    const costaRicaTime = new Date(now.getTime() + costaRicaOffset);
+    return costaRicaTime.toISOString().split('T')[0];
+};
+
+// Función para obtener fecha con offset para los tabs
+const getDateWithOffset = (daysToAdd: number): string => {
+    const now = new Date();
+    const costaRicaOffset = -6 * 60 * 60 * 1000;
+    const costaRicaTime = new Date(now.getTime() + costaRicaOffset);
+    costaRicaTime.setDate(costaRicaTime.getDate() + daysToAdd);
+    return costaRicaTime.toISOString().split('T')[0];
+};
+
 export default function SellerDashboard() {
     const [selectedType, setSelectedType] = useState<'TICA' | 'NICA' | null>(null);
     const [draws, setDraws] = useState<Draw[]>([]);
     const [closedDraws, setClosedDraws] = useState<Record<string, boolean>>({});
-    const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState<string>(getCostaRicaDate());
     const [selectedDraw, setSelectedDraw] = useState<Draw | null>(null);
     const [selectedNumbers, setSelectedNumbers] = useState<Set<string>>(new Set());
     const [selectedAmount, setSelectedAmount] = useState<number>(500);
@@ -28,10 +45,13 @@ export default function SellerDashboard() {
     
     const router = useRouter();
 
+    // Generar tabs de fechas CORREGIDOS
     const dateTabs = Array.from({ length: 8 }, (_, i) => {
-        const d = new Date();
-        d.setDate(d.getDate() + i);
-        return { iso: d.toISOString().split('T')[0], label: i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : d.toLocaleDateString('es-CR', { weekday: 'short', day: 'numeric' }) };
+        const dateStr = getDateWithOffset(i);
+        return { 
+            iso: dateStr, 
+            label: i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : new Date(dateStr).toLocaleDateString('es-CR', { weekday: 'short', day: 'numeric' }) 
+        };
     });
 
     useEffect(() => {
@@ -45,6 +65,7 @@ export default function SellerDashboard() {
             const token = sessionStorage.getItem('token');
             const url = `/seller/draws?type=${selectedType}&date=${selectedDate}`;
             console.log('🔍 Fetching draws:', url);
+            console.log('📅 Fecha consultada:', selectedDate);
             const data = await api.get(url, token);
             console.log('📦 Draws recibidos:', data);
             if (Array.isArray(data)) {
@@ -67,11 +88,14 @@ export default function SellerDashboard() {
             const token = sessionStorage.getItem('token');
             const amount = customAmount ? parseInt(customAmount) : selectedAmount;
             
+            // Calcular total
+            const total_amount = amount * selectedNumbers.size;
+            
             const response = await api.post('/seller/cash-bet', {
                 draw_id: selectedDraw.id,
-                player_name: 'Jugador en efectivo',
-                player_phone: '00000000',
-                items: Array.from(selectedNumbers).map(n => ({ number: n, amount }))
+                loteria_type: selectedType,
+                items: Array.from(selectedNumbers).map(n => ({ number: n, amount })),
+                total_amount: total_amount
             }, token);
 
             console.log('📝 Respuesta registro:', response);
@@ -82,12 +106,13 @@ export default function SellerDashboard() {
                 setSelectedNumbers(new Set());
                 setSelectedDraw(null);
                 alert('✅ Apuesta registrada exitosamente');
+                fetchDraws(); // Recargar sorteos
             } else {
                 alert(response.error || 'Error al registrar');
             }
-        } catch (err) { 
+        } catch (err: any) { 
             console.error('❌ Error en registro:', err);
-            alert('Fallo de red'); 
+            alert(err.message || 'Fallo de red'); 
         } finally { 
             setSubmitting(false); 
         }
@@ -149,7 +174,7 @@ export default function SellerDashboard() {
                             </div>
                         ) : (
                             draws.map(draw => {
-                                const isClosed = closedDraws[draw.id];
+                                const isClosed = closedDraws[draw.id] || !draw.is_open;
                                 return (
                                     <button
                                         key={draw.id}
@@ -167,7 +192,7 @@ export default function SellerDashboard() {
                         )}
                     </div>
 
-                    {/* Grid de 7 Columnas */}
+                    {/* Grid de 100 Números (00-99) */}
                     {selectedDraw && (
                         <div className="bg-[#1e293b] p-6 rounded-[3rem] border border-white/5">
                             <h3 className="text-[10px] font-black text-gray-500 uppercase text-center mb-6 tracking-widest">Seleccione Números</h3>
@@ -238,7 +263,7 @@ export default function SellerDashboard() {
                             <p className="text-[10px] font-bold">COMPROBANTE DE VENTA</p>
                         </div>
                         <div className="space-y-1 text-xs mb-4">
-                            <p className="font-black uppercase">{showTicket.lottery_type} - {showTicket.draw_time}</p>
+                            <p className="font-black uppercase">{showTicket.loteria_type} - {showTicket.draw_time}</p>
                             <p className="text-[10px]">{new Date(showTicket.draw_date).toLocaleDateString()}</p>
                             <p className="text-[10px] pt-1">Cliente: Jugador en efectivo</p>
                         </div>
