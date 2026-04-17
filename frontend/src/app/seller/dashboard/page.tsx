@@ -27,6 +27,21 @@ export default function SellerDashboard() {
     
     const router = useRouter();
 
+    // Recuperar selectedType guardado al montar el componente
+    useEffect(() => {
+        const savedType = sessionStorage.getItem('seller_selected_type');
+        if (savedType === 'TICA' || savedType === 'NICA') {
+            setSelectedType(savedType);
+        }
+    }, []);
+
+    // Guardar selectedType cuando cambie
+    useEffect(() => {
+        if (selectedType) {
+            sessionStorage.setItem('seller_selected_type', selectedType);
+        }
+    }, [selectedType]);
+
     const dateTabs = Array.from({ length: 8 }, (_, i) => {
         const dateStr = getLocalDateWithOffset(i);
         return { 
@@ -59,7 +74,6 @@ export default function SellerDashboard() {
     const handleRegister = async () => {
         if (!selectedDraw || selectedNumbers.size === 0) return;
         
-        // Verificar si sigue abierto usando hora local
         if (!isDrawOpen(selectedDraw.draw_date, selectedDraw.draw_time)) {
             alert('Este sorteo ya cerró.');
             return;
@@ -119,11 +133,17 @@ export default function SellerDashboard() {
         <div className="min-h-screen bg-[#0f172a] text-white p-4">
             <header className="flex justify-between items-center mb-6 bg-[#1e293b] p-4 rounded-3xl border border-white/5">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => setSelectedType(null)} className="text-2xl hover:scale-110 transition-transform">🔙</button>
+                    <button onClick={() => {
+                        setSelectedType(null);
+                        sessionStorage.removeItem('seller_selected_type');
+                    }} className="text-2xl hover:scale-110 transition-transform">🔙</button>
                     <Logo size="text-xl" />
                     <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase ${selectedType === 'TICA' ? 'bg-blue-500/20 text-blue-400' : 'bg-rose-500/20 text-rose-500'}`}>{selectedType}</span>
                 </div>
-                <button onClick={() => router.push('/seller/history')} className="text-[10px] font-black uppercase text-gray-400">📜 Historial</button>
+                <div className="flex gap-2">
+                    <button onClick={() => router.push('/seller/history')} className="text-[10px] font-black uppercase text-gray-400">📜 Historial</button>
+                    <button onClick={() => router.push('/seller/results')} className="text-[10px] font-black uppercase text-gray-400">🏆 Resultados</button>
+                </div>
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
