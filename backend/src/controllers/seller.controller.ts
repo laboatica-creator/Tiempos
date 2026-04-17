@@ -5,7 +5,6 @@ import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkey_tiempos_prod_2026';
 
-// Obtener seller_id del token
 const getSellerIdFromToken = (req: AuthRequest): string | null => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -21,21 +20,19 @@ const getSellerIdFromToken = (req: AuthRequest): string | null => {
     return null;
 };
 
-// Función para obtener fecha actual en Costa Rica (sin desfase)
 const getCostaRicaDate = (): string => {
     const now = new Date();
-    const offset = 6 * 60 * 60 * 1000; // Costa Rica UTC-6
+    const offset = 6 * 60 * 60 * 1000;
     const costaRicaTime = new Date(now.getTime() - offset);
     return costaRicaTime.toISOString().split('T')[0];
 };
 
 const getCostaRicaNow = (): Date => {
     const now = new Date();
-    const offset = 6 * 60 * 60 * 1000; // Costa Rica UTC-6
+    const offset = 6 * 60 * 60 * 1000;
     return new Date(now.getTime() - offset);
 };
 
-// Obtener sorteos activos - CORREGIDO para días futuros
 export const getActiveDraws = async (req: AuthRequest, res: Response) => {
     try {
         const { type, date } = req.query;
@@ -54,18 +51,13 @@ export const getActiveDraws = async (req: AuthRequest, res: Response) => {
                 TO_CHAR(d.draw_date, 'YYYY-MM-DD') as draw_date,
                 d.draw_time,
                 CASE 
-                    WHEN d.draw_date > CURRENT_DATE THEN true
-                    WHEN d.draw_date < CURRENT_DATE THEN false
-                    WHEN d.draw_date = CURRENT_DATE AND 
+                    WHEN d.draw_date > $1::DATE THEN true
+                    WHEN d.draw_date = $1::DATE AND 
                          (NOW() AT TIME ZONE 'America/Costa_Rica' + INTERVAL '20 minutes') < 
                          (d.draw_date + d.draw_time) AT TIME ZONE 'America/Costa_Rica'
                     THEN true 
                     ELSE false 
-                END as is_open,
-                TO_CHAR(
-                    (d.draw_date + d.draw_time) AT TIME ZONE 'America/Costa_Rica' - INTERVAL '20 minutes',
-                    'HH24:MI:SS'
-                ) as closing_time
+                END as is_open
             FROM draws d
             WHERE d.draw_date >= $1::DATE
             AND d.draw_date <= $1::DATE + INTERVAL '7 days'
@@ -89,7 +81,7 @@ export const getActiveDraws = async (req: AuthRequest, res: Response) => {
         
         console.log(`✅ Sorteos encontrados: ${result.rows.length}`);
         result.rows.forEach(row => {
-            console.log(`   - ${row.draw_date} ${row.draw_time}: is_open=${row.is_open}, cierra=${row.closing_time}`);
+            console.log(`   - ${row.draw_date} ${row.draw_time}: is_open=${row.is_open}`);
         });
         
         res.json(result.rows);
@@ -99,7 +91,6 @@ export const getActiveDraws = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Registrar apuesta en efectivo (vendedor)
 export const createCashBet = async (req: AuthRequest, res: Response) => {
     const sellerId = getSellerIdFromToken(req);
     const { items, draw_id, loteria_type, total_amount } = req.body;
@@ -124,14 +115,12 @@ export const createCashBet = async (req: AuthRequest, res: Response) => {
     }
     
     try {
-        // Verificar si el sorteo está abierto - CORREGIDO
         const drawCheck = await pool.query(`
             SELECT 
                 id,
                 draw_date,
                 CASE 
                     WHEN draw_date > CURRENT_DATE THEN true
-                    WHEN draw_date < CURRENT_DATE THEN false
                     WHEN draw_date = CURRENT_DATE AND 
                          (NOW() AT TIME ZONE 'America/Costa_Rica' + INTERVAL '20 minutes') < 
                          (draw_date + draw_time) AT TIME ZONE 'America/Costa_Rica'
@@ -149,7 +138,6 @@ export const createCashBet = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ error: 'El sorteo ya cerró para apuestas (20 min antes)' });
         }
         
-        // Crear usuario genérico para ventas en efectivo
         let userId = null;
         const genericUser = await pool.query(
             `SELECT id FROM users WHERE email = 'cash_seller@tiempos.com' LIMIT 1`
