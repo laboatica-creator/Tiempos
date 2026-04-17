@@ -15,24 +15,24 @@ export default function Timer({ drawTime, drawDate, onExpire }: TimerProps) {
     useEffect(() => {
         const calculateTimeLeft = () => {
             try {
-                // Parsear fecha y hora correctamente
-                const [year, month, day] = drawDate.split('-');
-                const [hour, minute] = drawTime.split(':');
+                // CORRECCIÓN: Usar hora Costa Rica explícitamente
+                // Formato drawDate: "2026-04-16", drawTime: "13:00:00"
+                const [year, month, day] = drawDate.split('-').map(Number);
+                const [hour, minute, second] = drawTime.split(':').map(Number);
                 
-                const drawDateTime = new Date(
-                    parseInt(year),
-                    parseInt(month) - 1,
-                    parseInt(day),
-                    parseInt(hour),
-                    parseInt(minute),
-                    0
-                );
+                // Crear fecha del sorteo en Costa Rica
+                const drawDateTime = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
                 
-                // Cierre 20 minutos antes
+                // Cierre = 20 minutos antes del sorteo
                 const closeDateTime = new Date(drawDateTime.getTime() - 20 * 60 * 1000);
-                const now = new Date();
                 
-                if (now >= closeDateTime) {
+                // Hora actual en Costa Rica (UTC-6)
+                const now = new Date();
+                const costaRicaOffset = -6 * 60; // Costa Rica UTC-6 en minutos
+                const localOffset = now.getTimezoneOffset();
+                const costaRicaNow = new Date(now.getTime() + (localOffset - costaRicaOffset) * 60 * 1000);
+                
+                if (costaRicaNow >= closeDateTime) {
                     setIsClosed(true);
                     setTimeLeft('CERRADO');
                     if (onExpire) onExpire();
@@ -41,15 +41,18 @@ export default function Timer({ drawTime, drawDate, onExpire }: TimerProps) {
                 
                 setIsClosed(false);
                 
-                const diffMs = closeDateTime.getTime() - now.getTime();
+                const diffMs = closeDateTime.getTime() - costaRicaNow.getTime();
                 const diffMins = Math.floor(diffMs / 60000);
                 const hours = Math.floor(diffMins / 60);
                 const mins = diffMins % 60;
+                const secs = Math.floor((diffMs % 60000) / 1000);
                 
                 if (hours > 0) {
-                    setTimeLeft(`${hours}h ${mins}m`);
+                    setTimeLeft(`${hours}h ${mins}m ${secs}s`);
+                } else if (mins > 0) {
+                    setTimeLeft(`${mins}m ${secs}s`);
                 } else {
-                    setTimeLeft(`${mins}m`);
+                    setTimeLeft(`${secs}s`);
                 }
             } catch (error) {
                 console.error('Timer error:', error);
@@ -58,7 +61,7 @@ export default function Timer({ drawTime, drawDate, onExpire }: TimerProps) {
         };
         
         calculateTimeLeft();
-        const interval = setInterval(calculateTimeLeft, 60000);
+        const interval = setInterval(calculateTimeLeft, 1000); // Actualizar cada segundo
         
         return () => clearInterval(interval);
     }, [drawTime, drawDate, onExpire]);
